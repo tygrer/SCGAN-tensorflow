@@ -27,7 +27,7 @@ class Generator:
           reuse=self.reuse, name='d64')                                 # (?, w/2, h/2, 64)
       d128 = ops.dk(d64, 4*self.ngf, is_training=self.is_training, norm=self.norm,
           reuse=self.reuse, name='d128')                                # (?, w/4, h/4, 128)
-      d128 = non_local.sn_non_local_block_sim(d128, None, name='g_non_local')
+      d128 = non_local.sn_non_local_block_sim(d128, None, reuse=self.reuse, name='g_non_local')
       if self.image_size <= 128:
         # use 6 residual blocks for 128x128 images
         res_output = ops.n_res_blocks(d128, reuse=self.reuse, n=6)      # (?, w/4, h/4, 128)

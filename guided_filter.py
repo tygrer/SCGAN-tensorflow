@@ -1,6 +1,6 @@
 import tensorflow as tf
 
-from .box_filter import box_filter
+from box_filter import box_filter
 
 
 def guided_filter(x, y, r, eps=1e-8, nhwc=False):

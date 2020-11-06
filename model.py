@@ -4,7 +4,7 @@ import utils
 from reader import Reader
 from discriminator import Discriminator
 from generator import Generator
-from guided_filter_tf.guided_filter import guided_filter
+from guided_filter import guided_filter
 
 REAL_LABEL = 0.9
 

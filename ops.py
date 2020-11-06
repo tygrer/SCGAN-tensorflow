@@ -1,7 +1,64 @@
 import tensorflow as tf
 
 ## Layers: follow the naming convention used in the original paper
+
 ### Generator layers
+def _l2normalize(v, eps=1e-12):
+  """l2 normize the input vector."""
+  return v / (tf.reduce_sum(v ** 2) ** 0.5 + eps)
+
+def spectral_normed_weight(weights, num_iters=1, update_collection=None,
+                           with_sigma=False):
+  """Performs Spectral Normalization on a weight tensor.
+
+  Specifically it divides the weight tensor by its largest singular value. This
+  is intended to stabilize GAN training, by making the discriminator satisfy a
+  local 1-Lipschitz constraint.
+  Based on [Spectral Normalization for Generative Adversarial Networks][sn-gan]
+  [sn-gan] https://openreview.net/pdf?id=B1QRgziT-
+
+  Args:
+    weights: The weight tensor which requires spectral normalization
+    num_iters: Number of SN iterations.
+    update_collection: The update collection for assigning persisted variable u.
+                       If None, the function will update u during the forward
+                       pass. Else if the update_collection equals 'NO_OPS', the
+                       function will not update the u during the forward. This
+                       is useful for the discriminator, since it does not update
+                       u in the second pass.
+                       Else, it will put the assignment in a collection
+                       defined by the user. Then the user need to run the
+                       assignment explicitly.
+    with_sigma: For debugging purpose. If True, the fuction returns
+                the estimated singular value for the weight tensor.
+  Returns:
+    w_bar: The normalized weight tensor
+    sigma: The estimated singular value for the weight tensor.
+  """
+  w_shape = weights.shape.as_list()
+  w_mat = tf.reshape(weights, [-1, w_shape[-1]])  # [-1, output_channel]
+  u = tf.get_variable('u', [1, w_shape[-1]],
+                      initializer=tf.truncated_normal_initializer(),
+                      trainable=False)
+  u_ = u
+  for _ in range(num_iters):
+    v_ = _l2normalize(tf.matmul(u_, w_mat, transpose_b=True))
+    u_ = _l2normalize(tf.matmul(v_, w_mat))
+
+  sigma = tf.squeeze(tf.matmul(tf.matmul(v_, w_mat), u_, transpose_b=True))
+  w_mat /= sigma
+  if update_collection is None:
+    with tf.control_dependencies([u.assign(u_)]):
+      w_bar = tf.reshape(w_mat, w_shape)
+  else:
+    w_bar = tf.reshape(w_mat, w_shape)
+    if update_collection != 'NO_OPS':
+      tf.add_to_collection(update_collection, u.assign(u_))
+  if with_sigma:
+    return w_bar, sigma
+  else:
+    return w_bar
+
 def c7s1_k(input, k, reuse=False, norm='instance', activation='relu', is_training=True, name='c7s1_k'):
   """ A 7x7 Convolution-BatchNorm-ReLU layer with k filters and stride 1
   Args:

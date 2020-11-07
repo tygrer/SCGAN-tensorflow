@@ -122,8 +122,6 @@ class CycleGAN:
     tf.summary.image('Y/fake_refine_Y', utils.batch_convert2int(self.fake_refiney))
     tf.summary.image('Y/refine_Y', utils.batch_convert2int(self.refiney))
     self.get_vars()
-    print('gvars', self.g_vars)
-    print('dvars', self.d_vars)
     print('sigma_ratio_vars', self.sigma_ratio_vars)
     for var in self.sigma_ratio_vars:
       tf.summary.scalar(var.name, var)

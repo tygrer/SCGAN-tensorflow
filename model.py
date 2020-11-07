@@ -133,16 +133,9 @@ class CycleGAN:
     """Get variables."""
     t_vars = tf.trainable_variables()
     # TODO(olganw): scoping or collections for this instead of name hack
-    self.d_vars = [var for var in t_vars if var.name.startswith('model/d_')]
-    self.g_vars = [var for var in t_vars if var.name.startswith('model/g_')]
+
     self.sigma_ratio_vars = [var for var in t_vars if 'sigma_ratio' in var.name]
-    for x in self.d_vars:
-      assert x not in self.g_vars
-    for x in self.g_vars:
-      assert x not in self.d_vars
-    for x in t_vars:
-      assert x in self.g_vars or x in self.d_vars, x.name
-    self.all_vars = t_vars
+
 
   def optimize(self, G_loss, D_Y_loss, F_loss, D_X_loss):
     def make_optimizer(loss, variables, name='Adam'):

@@ -136,29 +136,29 @@ def train():
       coord.request_stop()
       coord.join(threads)
 
-def test():
-    coord = tf.train.Coordinator()
-    gentor = Generator('G', False, 64, 'instance', FLAGS.image_size)
-    saver.restore(sess, ckpt_path)
-    # Set up tf session and initialize variables.
-    config = tf.ConfigProto()
-    config.gpu_options.allow_growth = True
-    sess = tf.Session(config=config)
-    init = tf.global_variables_initializer()
-
-    sess.run(init)
-    sess.run(tf.local_variables_initializer())
-    checkpoint = tf.train.get_checkpoint_state(checkpoints_dir)
-    print(checkpoints_dir)
-    meta_graph_path = checkpoint.model_checkpoint_path + ".meta"
-    restore = tf.train.import_meta_graph(meta_graph_path)
-    restore.restore(sess, tf.train.latest_checkpoint(checkpoints_dir))
-    threads = tf.train.start_queue_runners(coord=coord, sess=sess)
-    # Iterate over training steps.
-    feed = {:}
-    preds, _ = sess.run([pred, update_op],feed_dict=feed)
-    coord.request_stop()
-    coord.join(threads)
+# def test():
+#     coord = tf.train.Coordinator()
+#     gentor = Generator('G', False, 64, 'instance', FLAGS.image_size)
+#     saver.restore(sess, ckpt_path)
+#     # Set up tf session and initialize variables.
+#     config = tf.ConfigProto()
+#     config.gpu_options.allow_growth = True
+#     sess = tf.Session(config=config)
+#     init = tf.global_variables_initializer()
+#
+#     sess.run(init)
+#     sess.run(tf.local_variables_initializer())
+#     checkpoint = tf.train.get_checkpoint_state(checkpoints_dir)
+#     print(checkpoints_dir)
+#     meta_graph_path = checkpoint.model_checkpoint_path + ".meta"
+#     restore = tf.train.import_meta_graph(meta_graph_path)
+#     restore.restore(sess, tf.train.latest_checkpoint(checkpoints_dir))
+#     threads = tf.train.start_queue_runners(coord=coord, sess=sess)
+#     # Iterate over training steps.
+#     feed = {:}
+#     preds, _ = sess.run([pred, update_op],feed_dict=feed)
+#     coord.request_stop()
+#     coord.join(threads)
 
 def main(unused_argv):
   train()

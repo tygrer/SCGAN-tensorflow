@@ -17,8 +17,9 @@ def c7s1_k(input, k, reuse=False, norm='instance', activation='relu', is_trainin
     4D tensor
   """
   with tf.variable_scope(name, reuse=reuse):
+    input_shape = int(input.get_shape()[3])
     weights = _weights("weights",
-      shape=[7, 7, input.get_shape()[3], k])
+      shape=[7, 7, input_shape, k])
 
     padded = tf.pad(input, [[0,0],[3,3],[3,3],[0,0]], 'REFLECT')
     conv = tf.nn.conv2d(padded, weights,
@@ -46,8 +47,12 @@ def dk(input, k, reuse=False, norm='instance', is_training=True, name=None):
     4D tensor
   """
   with tf.variable_scope(name, reuse=reuse):
+    # if is_training is False:
+    #   input_shape = int(input.get_shape()[3]/2)
+    # else:
+    input_shape = int(input.get_shape()[3])
     weights = _weights("weights",
-      shape=[3, 3, input.get_shape()[3], k])
+      shape=[3, 3, input_shape, k])
 
     conv = tf.nn.conv2d(input, weights,
         strides=[1, 2, 2, 1], padding='SAME')
@@ -67,18 +72,23 @@ def Rk(input, k,  reuse=False, norm='instance', is_training=True, name=None):
     4D tensor (same shape as input)
   """
   with tf.variable_scope(name, reuse=reuse):
+    # if is_training is False:
+    #   input_shape = int(input.get_shape()[3])/2
+    # else:
+    input_shape = int(input.get_shape()[3])
     with tf.variable_scope('layer1', reuse=reuse):
       weights1 = _weights("weights1",
-        shape=[3, 3, input.get_shape()[3], k])
+        shape=[3, 3, input_shape, k])
       padded1 = tf.pad(input, [[0,0],[1,1],[1,1],[0,0]], 'REFLECT')
       conv1 = tf.nn.conv2d(padded1, weights1,
           strides=[1, 1, 1, 1], padding='VALID')
       normalized1 = _norm(conv1, is_training, norm)
       relu1 = tf.nn.relu(normalized1)
 
+    relu1_shape = int(relu1.get_shape()[3])
     with tf.variable_scope('layer2', reuse=reuse):
       weights2 = _weights("weights2",
-        shape=[3, 3, relu1.get_shape()[3], k])
+        shape=[3, 3, relu1_shape, k])
 
       padded2 = tf.pad(relu1, [[0,0],[1,1],[1,1],[0,0]], 'REFLECT')
       conv2 = tf.nn.conv2d(padded2, weights2,
@@ -89,8 +99,6 @@ def Rk(input, k,  reuse=False, norm='instance', is_training=True, name=None):
 
 def n_res_blocks(input, reuse, norm='instance', is_training=True, n=6):
   depth = input.get_shape()[3]
-  if is_training is False:
-    depth =128
   for i in range(1,n+1):
     output = Rk(input, depth, reuse, norm, is_training, 'R{}_{}'.format(depth, i))
     input = output
@@ -111,6 +119,7 @@ def uk(input, k, reuse=False, norm='instance', is_training=True, name=None, outp
     4D tensor
   """
   with tf.variable_scope(name, reuse=reuse):
+
     input_shape = input.get_shape().as_list()
 
     weights = _weights("weights",
@@ -141,9 +150,14 @@ def Ck(input, k, slope=0.2, stride=2, reuse=False, norm='instance', is_training=
   Returns:
     4D tensor
   """
+
+  # if is_training is False:
+  #     input_shape = int(input.get_shape()[3]) / 2
+  # else:
+  input_shape = int(input.get_shape()[3])
   with tf.variable_scope(name, reuse=reuse):
     weights = _weights("weights",
-      shape=[4, 4, input.get_shape()[3], k])
+      shape=[4, 4, input_shape, k])
 
     conv = tf.nn.conv2d(input, weights,
         strides=[1, stride, stride, 1], padding='SAME')
@@ -152,7 +166,7 @@ def Ck(input, k, slope=0.2, stride=2, reuse=False, norm='instance', is_training=
     output = _leaky_relu(normalized, slope)
     return output
 
-def last_conv(input, reuse=False, use_sigmoid=False, name=None):
+def last_conv(input, reuse=False, use_sigmoid=False, name=None, is_training=True):
   """ Last convolutional layer of discriminator network
       (1 filter with size 4x4, stride 1)
   Args:
@@ -161,9 +175,13 @@ def last_conv(input, reuse=False, use_sigmoid=False, name=None):
     use_sigmoid: boolean (False if use lsgan)
     name: string, e.g. 'C64'
   """
+  # if is_training is False:
+  #     input_shape = int(input.get_shape()[3]) / 2
+  # else:
+  input_shape = int(input.get_shape()[3])
   with tf.variable_scope(name, reuse=reuse):
     weights = _weights("weights",
-      shape=[4, 4, input.get_shape()[3], 1])
+      shape=[4, 4, input_shape, 1])
     biases = _biases("biases", [1])
 
     conv = tf.nn.conv2d(input, weights,
@@ -203,7 +221,7 @@ def _norm(input, is_training, norm='instance'):
   """ Use Instance Normalization or Batch Normalization or None
   """
   if norm == 'instance':
-    return _instance_norm(input)
+    return _instance_norm(input,is_training)
   elif norm == 'batch':
     return _batch_norm(input, is_training)
   else:
@@ -219,11 +237,15 @@ def _batch_norm(input, is_training):
                                         updates_collections=None,
                                         is_training=is_training)
 
-def _instance_norm(input):
+def _instance_norm(input,is_training):
   """ Instance Normalization
   """
   with tf.variable_scope("instance_norm"):
-    depth = input.get_shape()[3]
+    # if is_training is False:
+    #   input_shape = int(input.get_shape()[3]) / 2
+    # else:
+    input_shape = int(input.get_shape()[3])
+    depth = input_shape
     scale = _weights("scale", [depth], mean=1.0)
     offset = _biases("offset", [depth])
     mean, variance = tf.nn.moments(input, axes=[1,2], keep_dims=True)

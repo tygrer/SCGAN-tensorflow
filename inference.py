@@ -17,12 +17,13 @@ FLAGS = tf.flags.FLAGS
 tf.flags.DEFINE_string('checkpoint', '', '')
 tf.flags.DEFINE_string('input_dir', '/raid/tanggaoyang/test_images/', 'input image path (.jpg)')
 tf.flags.DEFINE_string('output', '', 'output image path (.jpg)')
-tf.flags.DEFINE_integer('image_size_inference', '256', 'image size, default: 256')
+tf.flags.DEFINE_integer('image_size_inference', '128', 'image size, default: 256')
 
 def inference():
   test_record_name = "./test_image.tfrecords"
   model_name = os.path.basename(FLAGS.checkpoint) + ".pb"
   export_graph.export_graph(model_name, "./checkpoints/"+FLAGS.checkpoint, XtoY=True)
+  print("success to export graph")
   test_file_paths = build_data.data_reader(FLAGS.input_dir, test_record_name)
   model_path = "./pretrained/" + model_name
   build_data.data_writer(FLAGS.input_dir, test_record_name)
@@ -36,7 +37,7 @@ def inference():
       serialized_example,
       features={
         'image/file_name': tf.FixedLenFeature([], tf.string),
-        'image/encoded_image': tf.FixedLenFeature([], tf.string),
+        'image/encoded_image' : tf.FixedLenFeature([], tf.string),
       })
 
     image_buffer = features['image/encoded_image']
@@ -45,16 +46,16 @@ def inference():
     input_image = tf.image.resize_images(input_image, size=(FLAGS.image_size, FLAGS.image_size))
     input_image = utils.convert2float(input_image)
     input_image.set_shape([FLAGS.image_size, FLAGS.image_size, 3])
-    # input_images = tf.train.batch(
-    #   [input_image], batch_size=1, num_threads=8,
-    #   capacity=1000 + 3 * 1
-    # )
+    input_images = tf.train.batch(
+      [input_image], batch_size=100, num_threads=8,
+      capacity=1000 + 3 * 1
+    )
 
     with tf.gfile.FastGFile(model_path, 'rb') as model_file:
       graph_def = tf.GraphDef()
       graph_def.ParseFromString(model_file.read())
     [output_images] = tf.import_graph_def(graph_def,
-                          input_map={'input_image': input_image},
+                          input_map={'input_image': input_images},
                           return_elements=['output_image:0'],
                           name='output')
   with tf.Session(graph=graph) as sess:

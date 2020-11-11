@@ -27,12 +27,13 @@ class Generator:
       d128 = ops.dk(d64, 4*self.ngf, is_training=self.is_training, norm=self.norm,
           reuse=self.reuse, name='d128')                                # (?, w/4, h/4, 128)
 
-      if self.image_size <= 128 and self.is_training == False:
+      if self.image_size <= 128 or self.is_training == False:
         # use 6 residual blocks for 128x128 images
-        res_output = ops.n_res_blocks(d128, reuse=self.reuse, n=6)      # (?, w/4, h/4, 128)
+
+        res_output = ops.n_res_blocks(d128, reuse=self.reuse, n=6,is_training=self.is_training)      # (?, w/4, h/4, 128)
       else:
         # 9 blocks for higher resolution
-        res_output = ops.n_res_blocks(d128, reuse=self.reuse, n=9)      # (?, w/4, h/4, 128)
+        res_output = ops.n_res_blocks(d128, reuse=self.reuse, n=9,is_training=self.is_training)      # (?, w/4, h/4, 128)
 
       # fractional-strided convolution
       u64 = ops.uk(res_output, 2*self.ngf, is_training=self.is_training, norm=self.norm,
@@ -47,7 +48,7 @@ class Generator:
           activation='tanh', reuse=self.reuse, name='output')           # (?, w, h, 3)
     # set reuse=True for next call
     self.reuse = True
-    self.variables = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope=self.name)
+    self.variables = tf.get_collection(tf.GraphKeys.LOCAL_VARIABLES, scope=self.name)
 
     return output
 

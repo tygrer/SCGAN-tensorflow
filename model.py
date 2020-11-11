@@ -21,6 +21,7 @@ class CycleGAN:
                lambda1=10,
                lambda2=10,
                learning_rate=2e-4,
+               is_training=True,
                beta1=0.5,
                ngf=64
               ):
@@ -50,7 +51,7 @@ class CycleGAN:
     self.Y_train_file = Y_train_file
     self.X_pair_train_file = X_pair_train_file
     self.Y_pair_train_file = Y_pair_train_file
-    self.is_training = tf.placeholder_with_default(True, shape=[], name='is_training')
+    self.is_training = is_training
 
     self.G = Generator('G', self.is_training, ngf=ngf, norm=norm, image_size=image_size)
     self.D_Y = Discriminator('D_Y',
@@ -132,8 +133,8 @@ class CycleGAN:
       global_step = tf.Variable(0, trainable=False)
       starter_learning_rate = self.learning_rate
       end_learning_rate = 0.0
-      start_decay_step = 10000
-      decay_steps = 50000
+      start_decay_step = 2000
+      decay_steps = 5000
       beta1 = self.beta1
       learning_rate = (
           tf.where(

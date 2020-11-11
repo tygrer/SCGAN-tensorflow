@@ -22,7 +22,7 @@ tf.flags.DEFINE_integer('image_size_inference', '256', 'image size, default: 256
 def inference():
   test_record_name = "./test_image.tfrecords"
   model_name = os.path.basename(FLAGS.checkpoint) + ".pb"
-  export_graph.export_graph(model_name,XtoY=True)
+  export_graph.export_graph(model_name, "./checkpoints/"+FLAGS.checkpoint, XtoY=True)
   test_file_paths = build_data.data_reader(FLAGS.input_dir, test_record_name)
   model_path = "./pretrained/" + model_name
   build_data.data_writer(FLAGS.input_dir, test_record_name)

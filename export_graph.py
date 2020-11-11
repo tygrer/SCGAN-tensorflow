@@ -24,7 +24,7 @@ tf.flags.DEFINE_integer('ngf', 64,
 tf.flags.DEFINE_string('norm', 'instance',
                        '[instance, batch] use instance norm or batch norm, default: instance')
 
-def export_graph(model_name, XtoY=True):
+def export_graph(model_name, checkpoint_name, XtoY=True):
   graph = tf.Graph()
 
   with graph.as_default():
@@ -43,7 +43,7 @@ def export_graph(model_name, XtoY=True):
 
   with tf.Session(graph=graph) as sess:
     sess.run(tf.global_variables_initializer())
-    latest_ckpt = tf.train.latest_checkpoint(FLAGS.checkpoint_dir)
+    latest_ckpt = tf.train.latest_checkpoint(checkpoint_name)
     restore_saver.restore(sess, latest_ckpt)
     output_graph_def = tf.graph_util.convert_variables_to_constants(
         sess, graph.as_graph_def(), [output_image.op.name])
@@ -52,9 +52,9 @@ def export_graph(model_name, XtoY=True):
 
 def main(unused_argv):
   print('Export XtoY model...')
-  export_graph(FLAGS.XtoY_model, XtoY=True)
+  export_graph(FLAGS.XtoY_model, FLAGS.checkpoint_dir, XtoY=True)
   print('Export YtoX model...')
-  export_graph(FLAGS.YtoX_model, XtoY=False)
+  export_graph(FLAGS.YtoX_model, FLAGS.checkpoint_dir, XtoY=False)
 
 if __name__ == '__main__':
   tf.app.run()

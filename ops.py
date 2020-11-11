@@ -89,6 +89,8 @@ def Rk(input, k,  reuse=False, norm='instance', is_training=True, name=None):
 
 def n_res_blocks(input, reuse, norm='instance', is_training=True, n=6):
   depth = input.get_shape()[3]
+  if is_training is False:
+    depth =128
   for i in range(1,n+1):
     output = Rk(input, depth, reuse, norm, is_training, 'R{}_{}'.format(depth, i))
     input = output

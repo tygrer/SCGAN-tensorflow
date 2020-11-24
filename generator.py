@@ -52,7 +52,12 @@ class Generator:
 
     return output
 
-  def sample(self, input):
+  def encode_image(self, input):
     image = utils.batch_convert2int(self.__call__(input))
     image = tf.image.encode_jpeg(tf.squeeze(image, [0]))
+    return image
+
+  def decode_image(self, input):
+  #   #image = utils.batch_convert2int(self.__call__(input))
+    image = tf.image.decode_jpeg(input)
     return image

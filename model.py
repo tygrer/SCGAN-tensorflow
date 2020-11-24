@@ -52,12 +52,15 @@ class CycleGAN:
     self.X_pair_train_file = X_pair_train_file
     self.Y_pair_train_file = Y_pair_train_file
     self.is_training = is_training
-
-    self.G = Generator('G', self.is_training, ngf=ngf, norm=norm, image_size=image_size)
-    self.D_Y = Discriminator('D_Y',
+    with tf.device('/device:GPU: 2'):
+      self.G = Generator('G', self.is_training, ngf=ngf, norm=norm, image_size=image_size)
+    with tf.device('/device:GPU: 3'):
+      self.D_Y = Discriminator('D_Y',
         self.is_training, norm=norm, use_sigmoid=use_sigmoid)
-    self.F = Generator('F', self.is_training, ngf=ngf, norm=norm, image_size=image_size)
-    self.D_X = Discriminator('D_X',
+    with tf.device('/device:GPU: 4'):
+      self.F = Generator('F', self.is_training, ngf=ngf, norm=norm, image_size=image_size)
+    with tf.device('/device:GPU: 5'):
+     self.D_X = Discriminator('D_X',
         self.is_training, norm=norm, use_sigmoid=use_sigmoid)
 
     self.fake_x = tf.placeholder(tf.float32,

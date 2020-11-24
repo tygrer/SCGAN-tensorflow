@@ -207,7 +207,7 @@ def Ck(input, k, slope=0.2, stride=2, reuse=False, norm='instance', is_training=
     output = _leaky_relu(normalized, slope)
     return output
 
-def last_conv(input, reuse=False, use_sigmoid=False, name=None):
+def last_conv(input, reuse=False, use_sigmoid=False, name=None, is_training=True):
   """ Last convolutional layer of discriminator network
       (1 filter with size 4x4, stride 1)
   Args:
@@ -258,7 +258,7 @@ def _norm(input, is_training, norm='instance'):
   """ Use Instance Normalization or Batch Normalization or None
   """
   if norm == 'instance':
-    return _instance_norm(input)
+    return _instance_norm(input,is_training)
   elif norm == 'batch':
     return _batch_norm(input, is_training)
   else:
@@ -274,7 +274,7 @@ def _batch_norm(input, is_training):
                                         updates_collections=None,
                                         is_training=is_training)
 
-def _instance_norm(input):
+def _instance_norm(input,is_training):
   """ Instance Normalization
   """
   with tf.variable_scope("instance_norm"):

@@ -1,7 +1,6 @@
 import tensorflow as tf
 import ops
 import utils
-import non_local
 
 class Generator:
   def __init__(self, name, is_training, ngf=64, norm='instance', image_size=128):
@@ -27,13 +26,14 @@ class Generator:
           reuse=self.reuse, name='d64')                                 # (?, w/2, h/2, 64)
       d128 = ops.dk(d64, 4*self.ngf, is_training=self.is_training, norm=self.norm,
           reuse=self.reuse, name='d128')                                # (?, w/4, h/4, 128)
-      d128 = non_local.sn_non_local_block_sim(d128, None, reuse=self.reuse, name='g_non_local')
-      if self.image_size <= 128:
+
+      if self.image_size <= 128 or self.is_training == False:
         # use 6 residual blocks for 128x128 images
-        res_output = ops.n_res_blocks(d128, reuse=self.reuse, n=6)      # (?, w/4, h/4, 128)
+
+        res_output = ops.n_res_blocks(d128, reuse=self.reuse, n=6,is_training=self.is_training)      # (?, w/4, h/4, 128)
       else:
         # 9 blocks for higher resolution
-        res_output = ops.n_res_blocks(d128, reuse=self.reuse, n=9)      # (?, w/4, h/4, 128)
+        res_output = ops.n_res_blocks(d128, reuse=self.reuse, n=9,is_training=self.is_training)      # (?, w/4, h/4, 128)
 
       # fractional-strided convolution
       u64 = ops.uk(res_output, 2*self.ngf, is_training=self.is_training, norm=self.norm,
@@ -48,11 +48,16 @@ class Generator:
           activation='tanh', reuse=self.reuse, name='output')           # (?, w, h, 3)
     # set reuse=True for next call
     self.reuse = True
-    self.variables = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope=self.name)
+    self.variables = tf.get_collection(tf.GraphKeys.LOCAL_VARIABLES, scope=self.name)
 
     return output
 
-  def sample(self, input):
+  def encode_image(self, input):
     image = utils.batch_convert2int(self.__call__(input))
     image = tf.image.encode_jpeg(tf.squeeze(image, [0]))
+    return image
+
+  def decode_image(self, input):
+  #   #image = utils.batch_convert2int(self.__call__(input))
+    image = tf.image.decode_jpeg(input)
     return image

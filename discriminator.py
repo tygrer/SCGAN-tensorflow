@@ -31,9 +31,9 @@ class Discriminator:
       # apply a convolution to produce a 1 dimensional output (1 channel?)
       # use_sigmoid = False if use_lsgan = True
       output = ops.last_conv(C512, reuse=self.reuse,
-          use_sigmoid=self.use_sigmoid, name='output')          # (?, w/16, h/16, 1)
+          use_sigmoid=self.use_sigmoid, name='output',is_training=self.is_training)          # (?, w/16, h/16, 1)
 
     self.reuse = True
-    self.variables = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope=self.name)
+    self.variables = tf.get_collection(tf.GraphKeys.LOCAL_VARIABLES, scope=self.name)
 
     return output

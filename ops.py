@@ -151,6 +151,27 @@ def n_res_blocks(input, reuse, norm='instance', is_training=True, n=6):
     input = output
   return output
 
+def cat_two_channel(input1, input2, k, reuse=False, is_training=False, norm="",name="cat"):
+    with tf.variable_scope(name, reuse=reuse) as scope:
+        n, h, w, c = input1.shape.as_list()
+        x = tf.concat([tf.slice(input1,[0,0,0,0],[1,h,w,1]),tf.slice(input2,[0,0,0,0],[1,h,w,1])],-1)
+        for i in list(range(c)[1:]):
+          x = tf.concat([x,tf.slice(input1,[0,0,0,i],[1,h,w,1]),tf.slice(input2,[0,0,0,i],[1,h,w,1])],-1)
+        print(x.shape.as_list())
+        weights1 = _weights("weights",
+                            shape=[3, 3, x.get_shape()[3], k])
+        padded1 = tf.pad(x, [[0, 0], [1, 1], [1, 1], [0, 0]], 'REFLECT')
+        conv1 = tf.nn.conv2d(padded1, weights1,
+                             strides=[1, 1, 1, 1], padding='VALID')
+        normalized1 = _norm(conv1, is_training, norm)
+        relu1 = tf.nn.relu(normalized1)
+        #x = tf.concat([input1, input2], axis=0)
+
+        # x_reshaped = tf.reshape(x, [-1, h, w, num_groups, c // num_groups])
+        # x_transposed = tf.transpose(x_reshaped, [0, 1, 2, 4, 3])
+        # output = tf.reshape(x_transposed, [-1, h, w, c]
+    return relu1
+
 def uk(input, k, reuse=False, norm='instance', is_training=True, name=None, output_size=None):
   """ A 3x3 fractional-strided-Convolution-BatchNorm-ReLU layer
       with k filters, stride 1/2
@@ -182,7 +203,7 @@ def uk(input, k, reuse=False, norm='instance', is_training=True, name=None, outp
     return output
 
 ### Discriminator layers
-def Ck(input, k, slope=0.2, stride=2, reuse=False, norm='instance', is_training=True, name=None):
+def Ck(input, k, slope=0.2, stride=2, reuse=False, norm='instance', is_training=True, name=None, update_collection=None):
   """ A 4x4 Convolution-BatchNorm-LeakyReLU layer with k filters and stride 2
   Args:
     input: 4D tensor
@@ -198,7 +219,7 @@ def Ck(input, k, slope=0.2, stride=2, reuse=False, norm='instance', is_training=
   """
   with tf.variable_scope(name, reuse=reuse):
     weights = _weights("weights",
-      shape=[4, 4, input.get_shape()[3], k])
+      shape=[4, 4, input.get_shape()[3], k], update_collection=update_collection)
 
     conv = tf.nn.conv2d(input, weights,
         strides=[1, stride, stride, 1], padding='SAME')
@@ -229,7 +250,7 @@ def last_conv(input, reuse=False, use_sigmoid=False, name=None, is_training=True
     return output
 
 ### Helpers
-def _weights(name, shape, mean=0.0, stddev=0.02):
+def _weights(name, shape, mean=0.0, stddev=0.02,update_collection=None):
   """ Helper to create an initialized Variable
   Args:
     name: name of the variable
@@ -243,7 +264,9 @@ def _weights(name, shape, mean=0.0, stddev=0.02):
     name, shape,
     initializer=tf.random_normal_initializer(
       mean=mean, stddev=stddev, dtype=tf.float32))
+  #w_bar = spectral_normed_weight(var, num_iters=1, update_collection=update_collection)
   return var
+
 
 def _biases(name, shape, constant=0.0):
   """ Helper to create an initialized Bias with constant

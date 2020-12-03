@@ -9,7 +9,8 @@ class Discriminator:
     self.reuse = False
     self.use_sigmoid = use_sigmoid
 
-  def __call__(self, input):
+
+  def __call__(self, input, update_collection):
     """
     Args:
       input: batch_size x image_size x image_size x 3
@@ -17,16 +18,17 @@ class Discriminator:
       output: 4D tensor batch_size x out_size x out_size x 1 (default 1x5x5x1)
               filled with 0.9 if real, 0.0 if fake
     """
+
     with tf.variable_scope(self.name):
       # convolution layers
       C64 = ops.Ck(input, 64, reuse=self.reuse, norm=None,
-          is_training=self.is_training, name='C64')             # (?, w/2, h/2, 64)
+          is_training=self.is_training, name='C64', update_collection=update_collection)             # (?, w/2, h/2, 64)
       C128 = ops.Ck(C64, 128, reuse=self.reuse, norm=self.norm,
-          is_training=self.is_training, name='C128')            # (?, w/4, h/4, 128)
+          is_training=self.is_training, name='C128', update_collection=update_collection)            # (?, w/4, h/4, 128)
       C256 = ops.Ck(C128, 256, reuse=self.reuse, norm=self.norm,
-          is_training=self.is_training, name='C256')            # (?, w/8, h/8, 256)
+          is_training=self.is_training, name='C256', update_collection=update_collection)            # (?, w/8, h/8, 256)
       C512 = ops.Ck(C256, 512,reuse=self.reuse, norm=self.norm,
-          is_training=self.is_training, name='C512')            # (?, w/16, h/16, 512)
+          is_training=self.is_training, name='C512', update_collection=update_collection)            # (?, w/16, h/16, 512)
 
       # apply a convolution to produce a 1 dimensional output (1 channel?)
       # use_sigmoid = False if use_lsgan = True
@@ -34,6 +36,6 @@ class Discriminator:
           use_sigmoid=self.use_sigmoid, name='output',is_training=self.is_training)          # (?, w/16, h/16, 1)
 
     self.reuse = True
-    self.variables = tf.get_collection(tf.GraphKeys.LOCAL_VARIABLES, scope=self.name)
+    self.variables = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope=self.name)
 
     return output

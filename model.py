@@ -111,10 +111,11 @@ class CycleGAN:
     cycle_loss = self.cycle_consistency_loss(restructx, restructy, x, y)
     cycle_guided_loss = self.guided_filter_consistency_loss(restructx, restructy, x, y)
     dark_channel_loss = self.dark_channel_loss(restructx_dm, restructy_dm, real_x_dm, real_y_dm)
-    G_loss =  G_gan_loss + cycle_loss + cycle_guided_loss + G_l1_loss + dark_channel_loss + g_atmospheric_loss + f_atmospheric_loss_back
-    F_loss = F_gan_loss + cycle_loss + cycle_guided_loss + F_l1_loss + dark_channel_loss + f_atmospheric_loss  + g_atmospheric_loss_back
+    G_loss =  G_gan_loss + cycle_loss + cycle_guided_loss + G_l1_loss #+ g_atmospheric_loss + f_atmospheric_loss_back
+    F_loss = F_gan_loss + cycle_loss + cycle_guided_loss + F_l1_loss #+ f_atmospheric_loss  + g_atmospheric_loss_back
 
-
+    atmospheric_loss_g = g_atmospheric_loss + f_atmospheric_loss_back #+ dark_channel_loss
+    atmospheric_loss_f = f_atmospheric_loss + g_atmospheric_loss_back #+ dark_channel_loss
     # summary
     #tf.summary.histogram('D_Y/true', self.D_Y(y,None))
     #tf.summary.histogram('D_Y/fake', self.D_Y(self.G(x),"NO_OPS"))
@@ -158,13 +159,11 @@ class CycleGAN:
     for var in self.sigma_ratio_vars:
        tf.summary.scalar(var.name, var)
     return G_loss, D_Y_loss, F_loss, D_X_loss, g_atmospheric_loss, f_atmospheric_loss, dark_channel_loss,\
-           cycle_guided_loss,cycle_loss,G_gan_loss,F_gan_loss,G_l1_loss,F_l1_loss,fake_x,fake_y
+           cycle_guided_loss,cycle_loss,G_gan_loss,F_gan_loss,G_l1_loss,F_l1_loss,fake_x,fake_y, atmospheric_loss_g,atmospheric_loss_f
 
 
-
-
-  def optimize(self, G_loss, D_Y_loss, F_loss, D_X_loss):
-    def make_optimizer(loss, variables, name='Adam'):
+  def optimize(self, G_loss, D_Y_loss, F_loss, D_X_loss, atmospheric_loss_g, atmospheric_loss_f):
+    def make_optimizer_G(loss, variables, atmospheric_loss=None, name='Adam'):
       """ Adam optimizer with learning rate 0.0002 for the first 100k steps (~100 epochs)
           and a linearly decaying rate that goes to zero over the next 100k steps
       """
@@ -186,27 +185,66 @@ class CycleGAN:
           )
       )
 
-
       tf.summary.scalar('learning_rate/{}'.format(name), learning_rate)
+      learning_step = (
+        tf.train.AdamOptimizer(learning_rate, beta1=beta1, name=name)
+          .minimize(loss, global_step=global_step, var_list=variables)
+      )
+      learning_rate_at = (
+          tf.where(
+                  tf.greater_equal(global_step, start_atmospheric_step),
+            learning_rate,
+            0
+          )
+      )
+      learning_step_at = (
+        tf.train.AdamOptimizer(learning_rate_at, beta1=beta1, name=name+'at')
+          .minimize(atmospheric_loss, global_step=global_step, var_list=variables)
+      )
+      return learning_step, learning_step_at
+    def make_optimizer_D(loss, variables, name='Adam'):
+      """ Adam optimizer with learning rate 0.0002 for the first 100k steps (~100 epochs)
+          and a linearly decaying rate that goes to zero over the next 100k steps
+      """
+      global_step = tf.Variable(0, trainable=False)
+      starter_learning_rate = self.learning_rate
+      start_decay_step = 1000
+      decay_steps = 5000
+      beta1 = self.beta1
+      learning_rate = (
+          tf.where(
+                  tf.greater_equal(global_step, start_decay_step),
+                  # tf.train.polynomial_decay(starter_learning_rate, global_step-start_decay_step,
+                  #                           decay_steps, end_learning_rate,
+                  #                           power=1.0),
+            tf.train.exponential_decay(starter_learning_rate, global_step, decay_steps, 0.97),
+                  starter_learning_rate
+          )
+      )
       learning_step = (
         tf.train.AdamOptimizer(learning_rate, beta1=beta1, name=name)
           .minimize(loss, global_step=global_step, var_list=variables)
       )
       return learning_step
 
-    with tf.device('/cpu:0'):
+    G_optimizer1, G_optimizer2 = make_optimizer_G(G_loss, self.G.variables, atmospheric_loss_g, name='Adam_G')
+    F_optimizer1, F_optimizer2 =  make_optimizer_G(F_loss, self.F.variables,atmospheric_loss_f, name='Adam_F')
+    D_Y_optimizer = make_optimizer_D(D_Y_loss, self.D_Y.variables, name='Adam_D_Y')
+    D_X_optimizer = make_optimizer_D(D_X_loss, self.D_X.variables, name='Adam_D_X')
+    #G_optimizer = make_optimizer_D(G_loss+atmospheric_loss_g, self.D_Y.variables, name='Adam_D_Y')
+    #F_optimizer = make_optimizer_D(F_loss+atmospheric_loss_f, self.D_X.variables, name='Adam_D_X')
+  #G_optimizer2 = make_optimizer(G_loss, self.G.variables, name='Adam_G')
 
-      G_optimizer1 = make_optimizer(G_loss, self.G.variables, name='Adam_G')
-      D_Y_optimizer = make_optimizer(D_Y_loss, self.D_Y.variables, name='Adam_D_Y')
-    #G_optimizer2 = make_optimizer(G_loss, self.G.variables, name='Adam_G')
-      F_optimizer1 =  make_optimizer(F_loss, self.F.variables, name='Adam_F')
-      D_X_optimizer = make_optimizer(D_X_loss, self.D_X.variables, name='Adam_D_X')
-    #F_optimizer2 = make_optimizer(F_loss, self.F.variables, name='Adam_F')
 
-    #with tf.control_dependencies([G_optimizer1, D_Y_optimizer, G_optimizer2, F_optimizer1, D_X_optimizer,F_optimizer2]):
-      with tf.control_dependencies(
-            [G_optimizer1, D_Y_optimizer, F_optimizer1, D_X_optimizer]):
-        return tf.no_op(name='optimizers')
+  #F_optimizer2 = make_optimizer(F_loss, self.F.variables, name='Adam_F')
+
+  #with tf.control_dependencies([G_optimizer1, D_Y_optimizer, G_optimizer2, F_optimizer1, D_X_optimizer,F_optimizer2]):
+    with tf.control_dependencies(
+         [G_optimizer1, D_Y_optimizer, F_optimizer1, D_X_optimizer, G_optimizer2, F_optimizer2]):
+    #with tf.control_dependencies([D_Y_optimizer, D_X_optimizer, G_optimizer, F_optimizer]):
+
+      return tf.no_op(name='optimizers')
+
 
 
   def discriminator_loss(self, D, y, fake_y, use_lsgan=True):
@@ -256,8 +294,8 @@ class CycleGAN:
     r = 4
     eps = 1e-6
     nhwc = True
-    self.fake_refinex = tf.clip_by_value(guided_filter(x, rx, r, eps, nhwc),-1,1)
-    self.fake_refiney = tf.clip_by_value(guided_filter(y, ry, r, eps, nhwc),-1,1)
+    self.fake_refinex = guided_filter(x, rx, r, eps, nhwc)
+    self.fake_refiney = guided_filter(y, ry, r, eps, nhwc)
 
     # self.refinex = guided_filter(x, x, r, eps, nhwc)
     # self.refiney = guided_filter(y, y, r, eps, nhwc)
@@ -283,7 +321,7 @@ class CycleGAN:
     #restruct_I = tf.clip_by_value(restruct_I, -1, 1)
     atmospheric_loss = tf.reduce_mean(tf.abs(restruct_I - I))
 
-    return t, restruct_I, atmospheric_loss
+    return tf.clip_by_value(t, -1, 1), tf.clip_by_value(restruct_I, -1, 1), atmospheric_loss
 
   def atmospheric_refine_loss_f(self, real_dm, fake_dm, J, I, a):
 
@@ -295,7 +333,7 @@ class CycleGAN:
     restruct_J = tf.div(2 * I + a * (t - 1),self.protect_value(t + 1))
     #restruct_J = tf.clip_by_value(restruct_J, -1, 1)
     atmospheric_loss = tf.reduce_mean(tf.abs(restruct_J - J))
-    return t, restruct_J, atmospheric_loss
+    return  tf.clip_by_value(t, -1, 1), tf.clip_by_value(restruct_J, -1, 1), atmospheric_loss
 
 
   def refine_dark_channel_transmisstion(self, fake_dm, real_dm, I, J, a):
@@ -313,10 +351,7 @@ class CycleGAN:
     tj_clip = tf.expand_dims(tf.reduce_mean(tj, axis=-1), axis=-1)
     tj = tf.concat([tj_clip, tj_clip, tj_clip], axis=-1)
     t = tf.div((2 * ti - tj - 1),self.protect_value(tj - 1))
-    mean, variance = tf.nn.moments(t, axes=[1, 2], keep_dims=True)
-    epsilon = 1e-5
-    inv = tf.rsqrt(variance + epsilon)
-    t = (t - mean) * inv
+    #t = tf.clip_by_value(t, -1, 1)
     #t = tf.nn.softmax(t, axis=-1) + 0.01
     #t = self.protect_value(t)
     return t

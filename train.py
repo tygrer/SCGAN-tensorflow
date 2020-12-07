@@ -18,7 +18,7 @@ tf.flags.DEFINE_integer('lambda1', 10,
                         'weight for forward cycle loss (X->Y->X), default: 10')
 tf.flags.DEFINE_integer('lambda2', 10,
                         'weight for backward cycle loss (Y->X->Y), default: 10')
-tf.flags.DEFINE_float('learning_rate', 2e-5,
+tf.flags.DEFINE_float('learning_rate', 2e-3,
                       'initial learning rate for Adam, default: 0.0002')
 tf.flags.DEFINE_float('beta1', 0.8,
                       'momentum term of Adam, default: 0.5')
@@ -68,8 +68,8 @@ def train():
         ngf=FLAGS.ngf
     )
     G_loss, D_Y_loss, F_loss, D_X_loss, g_atmospheric_loss, f_atmospheric_loss, dark_channel_loss, cycle_guided_loss,\
-    cycle_loss, G_gan_loss, F_gan_loss, G_l1_loss, F_l1_loss, fake_x, fake_y  = cycle_gan.model()
-    optimizers = cycle_gan.optimize(G_loss, D_Y_loss, F_loss, D_X_loss)
+    cycle_loss, G_gan_loss, F_gan_loss, G_l1_loss, F_l1_loss, fake_x, fake_y, atmospheric_loss_g, atmospheric_loss_f = cycle_gan.model()
+    optimizers = cycle_gan.optimize(G_loss, D_Y_loss, F_loss, D_X_loss, atmospheric_loss_g, atmospheric_loss_f)
 
     summary_op = tf.summary.merge_all()
     train_writer = tf.summary.FileWriter(checkpoints_dir, graph)
@@ -99,11 +99,11 @@ def train():
         fake_y_val, fake_x_val = sess.run([fake_y, fake_x])
 
         # train
-        _, G_loss_val, D_Y_loss_val, F_loss_val, D_X_loss_val,  g_atmospheric_loss_val, f_atmospheric_loss_val, \
+        _,G_loss_val, D_Y_loss_val, F_loss_val, D_X_loss_val,  g_atmospheric_loss_val, f_atmospheric_loss_val, \
         dark_channel_loss_val, cycle_guided_loss_val,\
     cycle_loss_val, G_gan_loss_val, F_gan_loss_val, G_l1_loss_val, F_l1_loss_val, summary = (
               sess.run(
-                  [optimizers, G_loss, D_Y_loss, F_loss, D_X_loss,  g_atmospheric_loss, f_atmospheric_loss,
+                  [optimizers,G_loss, D_Y_loss, F_loss, D_X_loss,  g_atmospheric_loss, f_atmospheric_loss,
                    dark_channel_loss, cycle_guided_loss,
     cycle_loss, G_gan_loss, F_gan_loss, G_l1_loss, F_l1_loss, summary_op],
                   feed_dict={cycle_gan.fake_y: fake_Y_pool.query(fake_y_val),

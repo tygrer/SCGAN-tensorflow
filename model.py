@@ -227,12 +227,12 @@ class CycleGAN:
       )
       return learning_step
 
-    G_optimizer1, G_optimizer2 = make_optimizer_G(G_loss, self.G.variables, atmospheric_loss_g, name='Adam_G')
-    F_optimizer1, F_optimizer2 =  make_optimizer_G(F_loss, self.F.variables,atmospheric_loss_f, name='Adam_F')
+    #G_optimizer1, G_optimizer2 = make_optimizer_G(G_loss, self.G.variables, atmospheric_loss_g, name='Adam_G')
+    #F_optimizer1, F_optimizer2 =  make_optimizer_G(F_loss, self.F.variables,atmospheric_loss_f, name='Adam_F')
     D_Y_optimizer = make_optimizer_D(D_Y_loss, self.D_Y.variables, name='Adam_D_Y')
     D_X_optimizer = make_optimizer_D(D_X_loss, self.D_X.variables, name='Adam_D_X')
-    #G_optimizer = make_optimizer_D(G_loss+atmospheric_loss_g, self.D_Y.variables, name='Adam_D_Y')
-    #F_optimizer = make_optimizer_D(F_loss+atmospheric_loss_f, self.D_X.variables, name='Adam_D_X')
+    G_optimizer = make_optimizer_D(G_loss, self.D_Y.variables, name='Adam_G_Y')
+    F_optimizer = make_optimizer_D(F_loss, self.D_X.variables, name='Adam_F_X')
   #G_optimizer2 = make_optimizer(G_loss, self.G.variables, name='Adam_G')
 
 
@@ -240,7 +240,7 @@ class CycleGAN:
 
   #with tf.control_dependencies([G_optimizer1, D_Y_optimizer, G_optimizer2, F_optimizer1, D_X_optimizer,F_optimizer2]):
     with tf.control_dependencies(
-         [G_optimizer1, D_Y_optimizer, F_optimizer1, D_X_optimizer, G_optimizer2, F_optimizer2]):
+         [G_optimizer, D_Y_optimizer, F_optimizer, D_X_optimizer]):
     #with tf.control_dependencies([D_Y_optimizer, D_X_optimizer, G_optimizer, F_optimizer]):
 
       return tf.no_op(name='optimizers')

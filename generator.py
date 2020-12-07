@@ -20,7 +20,7 @@ class Generator:
     """
     with tf.variable_scope(self.name):
       # conv layers
-      in_darkmap = self.dark_channel(input)
+      in_darkmap = ops.dark_channel(input)
       input_n = tf.concat([input, in_darkmap], axis=-1)
       c7s1_32 = ops.c7s1_k(input_n, self.ngf, is_training=self.is_training, norm=self.norm,
           reuse=self.reuse, name='c7s1_32')
@@ -35,7 +35,7 @@ class Generator:
       d128 = ops.dk(d64, 4*self.ngf, is_training=self.is_training, norm=self.norm,
           reuse=self.reuse, name='d128')                                # (?, w/4, h/4, 128)
 
-      res_output,_ = non_local.sn_non_local_block_sim_self(d128, None, reuse=self.reuse, name='g_non_local')
+      #res_output,_ = non_local.sn_non_local_block_sim_self(d128, None, reuse=self.reuse, name='g_non_local')
 
       if self.image_size <= 128 or self.is_training == False:
         # use 6 residual blocks for 128x128 images
@@ -68,11 +68,11 @@ class Generator:
 
 
       # fractional-strided convolution
-      res_output_mix = ops.cat_two_channel(res_output, d128, 4 * self.ngf, reuse=self.reuse, name='res_cat',norm=self.norm, is_training=self.is_training)
-      u64 = ops.uk(res_output_mix, 2*self.ngf, is_training=self.is_training, norm=self.norm,
+      #res_output_mix = ops.cat_two_channel(res_output, d128, 4 * self.ngf, reuse=self.reuse, name='res_cat',norm=self.norm, is_training=self.is_training)
+      u64 = ops.uk(res_output, 2*self.ngf, is_training=self.is_training, norm=self.norm,
           reuse=self.reuse, name='u64')         # (?, w/2, h/2, 64)
-      u64_mix = ops.cat_two_channel(u64, d64, 2*self.ngf, reuse=self.reuse, name='u64_cat',norm=self.norm, is_training=self.is_training)
-      u32 = ops.uk(u64_mix, self.ngf, is_training=self.is_training, norm=self.norm,
+      #u64_mix = ops.cat_two_channel(u64, d64, 2*self.ngf, reuse=self.reuse, name='u64_cat',norm=self.norm, is_training=self.is_training)
+      u32 = ops.uk(u64, self.ngf, is_training=self.is_training, norm=self.norm,
           reuse=self.reuse, name='u32', output_size=self.image_size)         # (?, w, h, 32)
       #u32_mix = ops.cat_two_channel(u32, c7s1_32, reuse=self.reuse,name='u32_cat')
       # conv layer
@@ -80,7 +80,7 @@ class Generator:
       # but actually tanh was used and no _norm here
       output = ops.c7s1_k(u32, 3, norm=None,
           activation='tanh', reuse=self.reuse, name='output')           # (?, w, h, 3)
-      out_darkmap = self.dark_channel(output)
+      out_darkmap = ops.dark_channel(output)
     # set reuse=True for next call
     self.reuse = True
     self.variables = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope=self.name)
@@ -97,8 +97,5 @@ class Generator:
     image = tf.image.decode_jpeg(input)
     return image
 
-  def dark_channel(self, input):
-    rgb_min = tf.reduce_min(input,-1, keep_dims=True)
-    dark_map=-tf.nn.max_pool(-rgb_min,[1,5,5,1],[1, 1,1, 1],"SAME")
-    return dark_map
+
 

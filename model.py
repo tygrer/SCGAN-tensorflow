@@ -94,9 +94,9 @@ class CycleGAN:
     fake_y_pair, real_x_pair_dm, fake_y_pair_dm, x_pair_aestimate = self.G(x_pair)
     G_l1_loss = self.pair_l1_loss(fake_y_pair,y_pair)
     G_gan_loss = self.generator_loss(self.D_Y, fake_y, use_lsgan=self.use_lsgan)
-    t1, t2, g_atmospheric_loss = self.atmospheric_refine_loss_g(real_x_dm, fake_y_dm, x, fake_y, x_aestimate)
+    t1_g, t2_g, g_atmospheric_loss = self.atmospheric_refine_loss_g(real_x_dm, fake_y_dm, x, fake_y, x_aestimate)
     restructx, _, restructx_dm, restructy_aestimate = self.F(fake_y)
-
+    t1_f, t2_f, f_atmospheric_loss_back = self.atmospheric_refine_loss_f(fake_y_dm, restructx_dm, y, restructx, x_aestimate)
     D_Y_loss = self.discriminator_loss(self.D_Y, y, self.fake_y, use_lsgan=self.use_lsgan)
 
     # Y -> X
@@ -105,13 +105,14 @@ class CycleGAN:
     fake_x_pair, real_y_pair_dm, fake_x_pair_dm, y_pair_aestimate = self.F(y_pair)
     F_l1_loss = self.pair_l1_loss(fake_x_pair, x_pair)
     F_gan_loss = self.generator_loss(self.D_X, fake_x, use_lsgan=self.use_lsgan)
-    t1_f, t2_f, f_atmospheric_loss = self.atmospheric_refine_loss_f(real_y_dm, fake_x_dm, y, fake_x, y_aestimate)
+    t1_f_1, t2_f_1, f_atmospheric_loss = self.atmospheric_refine_loss_f(real_y_dm, fake_x_dm, y, fake_x, restructx_aestimate)
+    t1_g_1, t2_g_1, g_atmospheric_loss_back = self.atmospheric_refine_loss_g(fake_x_dm, restructy_dm, x, restructy, restructx_aestimate)
     D_X_loss = self.discriminator_loss(self.D_X, x, self.fake_x, use_lsgan=self.use_lsgan)
     cycle_loss = self.cycle_consistency_loss(restructx, restructy, x, y)
     cycle_guided_loss = self.guided_filter_consistency_loss(restructx, restructy, x, y)
-    dark_channel_loss = self.dark_channel_loss(fake_y_dm, fake_x_dm, real_x_dm, real_y_dm)
-    G_loss =  G_gan_loss + cycle_loss + cycle_guided_loss + G_l1_loss + g_atmospheric_loss + dark_channel_loss
-    F_loss = F_gan_loss + cycle_loss + cycle_guided_loss + F_l1_loss + f_atmospheric_loss + dark_channel_loss
+    dark_channel_loss = self.dark_channel_loss(restructx_dm, restructy_dm, real_x_dm, real_y_dm)
+    G_loss =  G_gan_loss + cycle_loss + cycle_guided_loss + G_l1_loss + dark_channel_loss + g_atmospheric_loss + f_atmospheric_loss_back
+    F_loss = F_gan_loss + cycle_loss + cycle_guided_loss + F_l1_loss + dark_channel_loss + f_atmospheric_loss  + g_atmospheric_loss_back
 
 
     # summary
@@ -133,18 +134,18 @@ class CycleGAN:
     tf.summary.scalar('loss/dark_channel_loss', dark_channel_loss)
 
     tf.summary.image('X/darkmap', utils.batch_convert2int(real_x_dm))
-    tf.summary.image('Y/gen_darkmap', utils.batch_convert2int(fake_y_dm))
+    tf.summary.image('Y/gen_darkmap', utils.batch_convert2int(fake_x_dm))
     tf.summary.image('X/generated', utils.batch_convert2int(fake_y))
     tf.summary.image('X/restru_darkmap', utils.batch_convert2int(restructx_dm))
     tf.summary.image('X/reconstruction', utils.batch_convert2int(restructx))
     tf.summary.image('X/fake_refine_x', utils.batch_convert2int(self.fake_refinex))
-    tf.summary.image('X/t1', utils.batch_convert2int((t1)))
-    tf.summary.image('X/t2', utils.batch_convert2int((t2)))
+    tf.summary.image('X/t1', utils.batch_convert2int((t1_g)))
+    tf.summary.image('X/t2', utils.batch_convert2int((t2_g)))
     tf.summary.image('X/A', utils.batch_convert2int((x_aestimate)))
     tf.summary.image('X/pair', utils.batch_convert2int(x_pair))
     tf.summary.image('Y/pair', utils.batch_convert2int(y_pair))
     tf.summary.image('Y/darkmap', utils.batch_convert2int(real_y_dm))
-    tf.summary.image('X/gen_darkmap', utils.batch_convert2int(fake_x_dm))
+    tf.summary.image('X/gen_darkmap', utils.batch_convert2int(fake_y_dm))
     tf.summary.image('Y/generated', utils.batch_convert2int(fake_x))
     tf.summary.image('Y/restru_darkmap', utils.batch_convert2int(restructy_dm))
     tf.summary.image('Y/reconstruction', utils.batch_convert2int(restructy))
@@ -170,8 +171,9 @@ class CycleGAN:
       global_step = tf.Variable(0, trainable=False)
       starter_learning_rate = self.learning_rate
       end_learning_rate = 0.0
-      start_decay_step = 2000
+      start_decay_step = 1000
       decay_steps = 5000
+      start_atmospheric_step = 30000
       beta1 = self.beta1
       learning_rate = (
           tf.where(
@@ -182,13 +184,13 @@ class CycleGAN:
             tf.train.exponential_decay(starter_learning_rate, global_step, decay_steps, 0.97),
                   starter_learning_rate
           )
-
       )
-      tf.summary.scalar('learning_rate/{}'.format(name), learning_rate)
 
+
+      tf.summary.scalar('learning_rate/{}'.format(name), learning_rate)
       learning_step = (
-          tf.train.AdamOptimizer(learning_rate, beta1=beta1, name=name)
-                  .minimize(loss, global_step=global_step, var_list=variables)
+        tf.train.AdamOptimizer(learning_rate, beta1=beta1, name=name)
+          .minimize(loss, global_step=global_step, var_list=variables)
       )
       return learning_step
 
@@ -254,8 +256,8 @@ class CycleGAN:
     r = 4
     eps = 1e-6
     nhwc = True
-    self.fake_refinex = tf.clip_by_value(guided_filter(x, rx, r, eps, nhwc),0,1)
-    self.fake_refiney = tf.clip_by_value(guided_filter(y, ry, r, eps, nhwc),0,1)
+    self.fake_refinex = tf.clip_by_value(guided_filter(x, rx, r, eps, nhwc),-1,1)
+    self.fake_refiney = tf.clip_by_value(guided_filter(y, ry, r, eps, nhwc),-1,1)
 
     # self.refinex = guided_filter(x, x, r, eps, nhwc)
     # self.refiney = guided_filter(y, y, r, eps, nhwc)
@@ -263,8 +265,8 @@ class CycleGAN:
     backward_loss_edge_y = tf.reduce_mean(tf.abs(self.fake_refiney - ry))
     forward_loss_color_x = tf.reduce_mean(tf.abs(self.fake_refinex - x))
     backward_loss_color_y = tf.reduce_mean(tf.abs(self.fake_refiney - y))
-    forward_loss = 2*forward_loss_color_x+ 2*forward_loss_edge_x
-    backward_loss = 2*backward_loss_color_y + 2*backward_loss_edge_y
+    forward_loss = forward_loss_color_x+ forward_loss_edge_x
+    backward_loss = backward_loss_color_y + backward_loss_edge_y
     loss = self.lambda1*forward_loss + self.lambda2*backward_loss
     return loss
 
@@ -273,41 +275,69 @@ class CycleGAN:
     return l1
 
   def atmospheric_refine_loss_g(self, real_dm, fake_dm, I, J, a):
-    r = 4
-    eps = 1e-6
-    nhwc = True
-    fake_dm = tf.concat([fake_dm, fake_dm, fake_dm], axis=-1)
-    real_dm = tf.concat([real_dm, real_dm, real_dm],axis=-1)
-    # print("I shape", I.get_shape())
-    # print("real_dm shape", real_dm.get_shape())
-    ti = guided_filter(I, real_dm, r, eps, nhwc)
-    tj = guided_filter(J, fake_dm, r, eps, nhwc)
-    t = tf.div((ti-a),(tj-a))
-    t = tf.clip_by_value(t, 0.1, 1)
-    restruct_I = tf.multiply(J,t)+tf.multiply((1-t),a)
+
+    t = self.refine_dark_channel_transmisstion(real_dm, fake_dm, I, J, a)
+
+    restruct_I = (tf.multiply(J - a, t) + a - J)/2
+
+    #restruct_I = tf.clip_by_value(restruct_I, -1, 1)
     atmospheric_loss = tf.reduce_mean(tf.abs(restruct_I - I))
-    return ti, tj, atmospheric_loss
+
+    return t, restruct_I, atmospheric_loss
 
   def atmospheric_refine_loss_f(self, real_dm, fake_dm, J, I, a):
+
+    t = self.refine_dark_channel_transmisstion(real_dm, fake_dm, I, J, a)
+    #omg = tf.get_variable(
+    #  'omgf', [], initializer=tf.constant_initializer(0.95))
+    #t = -(ti - tj)
+
+    restruct_J = tf.div(2 * I + a * (t - 1),self.protect_value(t + 1))
+    #restruct_J = tf.clip_by_value(restruct_J, -1, 1)
+    atmospheric_loss = tf.reduce_mean(tf.abs(restruct_J - J))
+    return t, restruct_J, atmospheric_loss
+
+
+  def refine_dark_channel_transmisstion(self, fake_dm, real_dm, I, J, a):
     r = 4
     eps = 1e-6
     nhwc = True
+    fake_dm, real_dm = self.refine_dark_channel_transmission_with_a(I, J, a)
     fake_dm = tf.concat([fake_dm, fake_dm, fake_dm], axis=-1)
     real_dm = tf.concat([real_dm, real_dm, real_dm],axis=-1)
     ti = guided_filter(I, fake_dm, r, eps, nhwc)
     tj = guided_filter(J, real_dm, r, eps, nhwc)
-    t = tf.div((ti-a),(tj-a))
-    restruct_J = tf.div(I-a,tf.clip_by_value(t,0.1,1)) + a
-    atmospheric_loss = tf.reduce_mean(tf.abs(restruct_J - J))
-    return ti, tj, atmospheric_loss
 
-  def dark_channel_loss(self, real_dm, fake_dm, real, fake):
-    r = 4
-    eps = 1e-6
-    nhwc = True
-    real_dp = guided_filter(real, real_dm, r, eps, nhwc)
-    fake_dp = guided_filter(fake, fake_dm, r, eps, nhwc)
-    forward_dark_loss = tf.reduce_mean(tf.abs(real_dp - fake_dp))
-    backward_dark_loss = tf.reduce_mean(tf.abs(real_dp - fake_dp))
-    dark_loss = 10*forward_dark_loss + 10*backward_dark_loss
+    ti_clip = tf.expand_dims(tf.reduce_mean(ti, axis=-1), axis=-1)
+    ti = tf.concat([ti_clip, ti_clip, ti_clip], axis=-1)
+    tj_clip = tf.expand_dims(tf.reduce_mean(tj, axis=-1), axis=-1)
+    tj = tf.concat([tj_clip, tj_clip, tj_clip], axis=-1)
+    t = tf.div((2 * ti - tj - 1),self.protect_value(tj - 1))
+    mean, variance = tf.nn.moments(t, axes=[1, 2], keep_dims=True)
+    epsilon = 1e-5
+    inv = tf.rsqrt(variance + epsilon)
+    t = (t - mean) * inv
+    #t = tf.nn.softmax(t, axis=-1) + 0.01
+    #t = self.protect_value(t)
+    return t
+
+
+  def refine_dark_channel_transmission_with_a(self, I, J, a):
+    a = self.protect_value(a)
+    I_dm= ops.dark_channel(tf.div(I, a))
+    J_dm = ops.dark_channel(tf.div(J, a))
+    return I_dm, J_dm
+
+
+  def dark_channel_loss(self, res_x, res_y, real_x, real_y):
+    forward_dark_loss = tf.reduce_mean(tf.abs(res_x - real_x))
+    backward_dark_loss = tf.reduce_mean(tf.abs(res_y - real_y))
+    dark_loss = 10 * forward_dark_loss + 10 * backward_dark_loss
     return dark_loss
+
+  def protect_value(self, t):
+    signt = tf.sign(t)
+    abst = tf.abs(t)
+    #clipt = tf.clip_by_value(abst, 0.01, 1)
+    t = tf.where(signt != 0, abst * signt, abst + 0.01)
+    return t

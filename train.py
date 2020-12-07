@@ -18,7 +18,7 @@ tf.flags.DEFINE_integer('lambda1', 10,
                         'weight for forward cycle loss (X->Y->X), default: 10')
 tf.flags.DEFINE_integer('lambda2', 10,
                         'weight for backward cycle loss (Y->X->Y), default: 10')
-tf.flags.DEFINE_float('learning_rate', 2e-3,
+tf.flags.DEFINE_float('learning_rate', 2e-5,
                       'initial learning rate for Adam, default: 0.0002')
 tf.flags.DEFINE_float('beta1', 0.8,
                       'momentum term of Adam, default: 0.5')

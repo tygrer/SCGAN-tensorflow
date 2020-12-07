@@ -157,7 +157,8 @@ def cat_two_channel(input1, input2, k, reuse=False, is_training=False, norm="",n
         x = tf.concat([tf.slice(input1,[0,0,0,0],[1,h,w,1]),tf.slice(input2,[0,0,0,0],[1,h,w,1])],-1)
         for i in list(range(c)[1:]):
           x = tf.concat([x,tf.slice(input1,[0,0,0,i],[1,h,w,1]),tf.slice(input2,[0,0,0,i],[1,h,w,1])],-1)
-        print(x.shape.as_list())
+        '''
+       print(x.shape.as_list())
         weights1 = _weights("weights",
                             shape=[3, 3, x.get_shape()[3], k])
         padded1 = tf.pad(x, [[0, 0], [1, 1], [1, 1], [0, 0]], 'REFLECT')
@@ -166,11 +167,11 @@ def cat_two_channel(input1, input2, k, reuse=False, is_training=False, norm="",n
         normalized1 = _norm(conv1, is_training, norm)
         relu1 = tf.nn.relu(normalized1)
         #x = tf.concat([input1, input2], axis=0)
-
+        '''
         # x_reshaped = tf.reshape(x, [-1, h, w, num_groups, c // num_groups])
         # x_transposed = tf.transpose(x_reshaped, [0, 1, 2, 4, 3])
         # output = tf.reshape(x_transposed, [-1, h, w, c]
-    return relu1
+    return x
 
 def uk(input, k, reuse=False, norm='instance', is_training=True, name=None, output_size=None):
   """ A 3x3 fractional-strided-Convolution-BatchNorm-ReLU layer
@@ -312,3 +313,8 @@ def _instance_norm(input,is_training):
 
 def safe_log(x, eps=1e-12):
   return tf.log(x + eps)
+
+def dark_channel(input):
+  rgb_min = tf.reduce_min(input, -1, keep_dims=True)
+  dark_map=-tf.nn.max_pool(-rgb_min,[1,5,5,1],[1, 1, 1 ,1],"SAME")
+  return dark_map

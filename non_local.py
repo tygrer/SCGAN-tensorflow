@@ -85,6 +85,7 @@ def sn_non_local_block_sim_attention(x, y, update_collection, name, reuse=False,
     batch_size, h, w, num_channels = x.get_shape().as_list()
     location_num = h * w
     downsampled_num = location_num
+    '''
     theta = sn_conv1x1(x, num_channels , update_collection, init, 'sn_conv_theta')
     theta = tf.reshape(
       theta, [batch_size, location_num, num_channels])
@@ -97,17 +98,26 @@ def sn_non_local_block_sim_attention(x, y, update_collection, name, reuse=False,
     attn = tf.matmul(theta, phi, transpose_b=True)
     attn = tf.nn.softmax(attn)
     print(tf.reduce_sum(attn, axis=-1))
-
+    
     # g path
     g = sn_conv1x1(x, num_channels, update_collection, init, 'sn_conv_g')
     #g = tf.layers.max_pooling2d(inputs=g, pool_size=[2, 2], strides=2)
     g = tf.reshape(
       g, [batch_size, downsampled_num, num_channels])
-
+    
     attn_g = tf.matmul(attn, g)
     attn_g = tf.reshape(attn_g, [batch_size, h, w, num_channels])
+    '''
+    y = tf.concat([y,y,y], axis=-1)
+    attn = tf.multiply(x,y)
     sigma = tf.get_variable(
       'sigma_ratio_a', [], initializer=tf.constant_initializer(1.0))
-    attn_g = sn_conv1x1(attn_g, num_channels, update_collection, init, 'sn_conv_attn')
-    x = tf.clip_by_value(sigma * attn_g, 0, 1)
-    return x , attn_g
+    #attn = ops._instance_norm(attn, is_training=True)
+    mean, variance = tf.nn.moments(attn, axes=[1, 2], keep_dims=True)
+    epsilon = 1e-5
+    inv = tf.rsqrt(variance + epsilon)
+    attn = (attn - mean) * inv
+    #attn_g = sn_conv1x1(attn, num_channels, update_collection, init, 'sn_conv_attn')
+    #attn = tf.nn.softmax(sigma * attn,axis=-1)+0.01
+    #x = tf.clip_by_value(sigma * attn, -1, 1)
+    return attn , attn

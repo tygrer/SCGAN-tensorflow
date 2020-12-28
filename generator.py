@@ -21,17 +21,17 @@ class Generator:
     with tf.variable_scope(self.name):
       # conv layers
       in_darkmap = ops.dark_channel(input)
-      #input_n = tf.concat([input, in_darkmap], axis=-1)
+      input_n = tf.concat([input, in_darkmap], axis=-1)
       c7s1_32 = ops.c7s1_k(input, self.ngf, is_training=self.is_training, norm=self.norm,
           reuse=self.reuse, name='c7s1_32')
       # (?, w, h, 32)
       d64 = ops.dk(c7s1_32, 2*self.ngf, is_training=self.is_training, norm=self.norm,
           reuse=self.reuse, name='d64')
-     # ars = ops.n_res_blocks(d64, reuse=self.reuse, n=2, is_training=self.is_training)
+      ars = ops.n_res_blocks(d64, reuse=self.reuse, n=2, is_training=self.is_training)
 
-      #art = ops.uk(ars, 3, is_training=self.is_training, norm=self.norm,
-      #    reuse=self.reuse, name='a_u3')  # (?, w, h, 3)
-      #aestimate,_ = non_local.sn_non_local_block_sim_attention(art, in_darkmap, None, reuse=self.reuse, name='at_non_local')
+      art = ops.uk(ars, 3, is_training=self.is_training, norm=self.norm,
+         reuse=self.reuse, name='a_u3')  # (?, w, h, 3)
+      aestimate,_ = non_local.sn_non_local_block_sim_attention(art, in_darkmap, None, reuse=self.reuse, name='at_non_local')
       d128 = ops.dk(d64, 4*self.ngf, is_training=self.is_training, norm=self.norm,
           reuse=self.reuse, name='d128')                                # (?, w/4, h/4, 128)
 
@@ -85,7 +85,7 @@ class Generator:
     self.reuse = True
     self.variables = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope=self.name)
 
-    return output, in_darkmap, out_darkmap, tf.ones_like(out_darkmap)
+    return output, in_darkmap, out_darkmap, tf.ones_like(out_darkmap)*0.85
 
   def encode_image(self, input):
     image = utils.batch_convert2int(self.__call__(input))

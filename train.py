@@ -68,7 +68,8 @@ def train():
         ngf=FLAGS.ngf
     )
     G_loss, D_Y_loss, F_loss, D_X_loss, g_atmospheric_loss, f_atmospheric_loss, dark_channel_loss, cycle_guided_loss,\
-    cycle_loss, G_gan_loss, F_gan_loss, G_l1_loss, F_l1_loss, fake_x, fake_y, atmospheric_loss_g, atmospheric_loss_f = cycle_gan.model()
+    cycle_loss, G_gan_loss, F_gan_loss, G_l1_loss, F_l1_loss, fake_x, fake_y, atmospheric_loss_g, atmospheric_loss_f,\
+            foreground_g, foreground_f = cycle_gan.model()
     optimizers = cycle_gan.optimize(G_loss, D_Y_loss, F_loss, D_X_loss, atmospheric_loss_g, atmospheric_loss_f)
 
     summary_op = tf.summary.merge_all()
@@ -101,18 +102,17 @@ def train():
         # train
         _,G_loss_val, D_Y_loss_val, F_loss_val, D_X_loss_val,  g_atmospheric_loss_val, f_atmospheric_loss_val, \
         dark_channel_loss_val, cycle_guided_loss_val,\
-    cycle_loss_val, G_gan_loss_val, F_gan_loss_val, G_l1_loss_val, F_l1_loss_val, summary = (
+    cycle_loss_val, G_gan_loss_val, F_gan_loss_val, G_l1_loss_val, F_l1_loss_val, foreground_g_val, foreground_f_val, summary = (
               sess.run(
                   [optimizers,G_loss, D_Y_loss, F_loss, D_X_loss,  g_atmospheric_loss, f_atmospheric_loss,
                    dark_channel_loss, cycle_guided_loss,
-    cycle_loss, G_gan_loss, F_gan_loss, G_l1_loss, F_l1_loss, summary_op],
+    cycle_loss, G_gan_loss, F_gan_loss, G_l1_loss, F_l1_loss, foreground_g, foreground_f, summary_op],
                   feed_dict={cycle_gan.fake_y: fake_Y_pool.query(fake_y_val),
                              cycle_gan.fake_x: fake_X_pool.query(fake_x_val)}
               )
         )
 
-        train_writer.add_summary(summary, step)
-        train_writer.flush()
+
 
         if step % 100 == 0:
           logging.info('-----------Step %d:-------------' % step)
@@ -129,9 +129,13 @@ def train():
           logging.info('  F_gan_loss : {}'.format(F_gan_loss_val))
           logging.info('  G_l1_loss : {}'.format(G_l1_loss_val))
           logging.info('  F_l1_loss : {}'.format(F_l1_loss_val))
+          logging.info('  G_foreground_loss ： {}'.format(foreground_g_val))
+          logging.info('  f_foreground_loss ： {}'.format(foreground_f_val))
         if step % 3000 == 0:
-          save_path = saver.save(sess, checkpoints_dir + "/model.ckpt", global_step=step)
-          logging.info("Model saved in file: %s" % save_path)
+            train_writer.add_summary(summary, step)
+            train_writer.flush()
+            save_path = saver.save(sess, checkpoints_dir + "/model.ckpt", global_step=step)
+            logging.info("Model saved in file: %s" % save_path)
 
         step += 1
 

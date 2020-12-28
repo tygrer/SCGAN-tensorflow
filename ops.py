@@ -246,8 +246,8 @@ def last_conv(input, reuse=False, use_sigmoid=False, name=None, is_training=True
     conv = tf.nn.conv2d(input, weights,
         strides=[1, 1, 1, 1], padding='SAME')
     output = conv + biases
-    if use_sigmoid:
-      output = tf.sigmoid(output)
+    #if use_sigmoid:
+      #output = tf.sigmoid(output)
     return output
 
 ### Helpers

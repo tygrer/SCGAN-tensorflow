@@ -84,8 +84,14 @@ class Generator:
     # set reuse=True for next call
     self.reuse = True
     self.variables = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope=self.name)
-
-    return output, in_darkmap, out_darkmap, tf.ones_like(out_darkmap)*0.85
+    max_val = tf.reduce_max(in_darkmap, axis=-1, keep_dims=True)
+    cond = tf.equal(in_darkmap, max_val)
+    res = tf.where(cond)
+    res_1d =  tf.slice(res, [0, 0], [1, 4])
+    res_1d = tf.squeeze(res_1d)
+    #res_1d = tf.expand_dims(tf.expand_dims(res_1d,0),-1)
+    A = tf.slice(input, res_1d , [-1,1,1,3])
+    return output, in_darkmap, out_darkmap, A#tf.ones_like(out_darkmap)*0.85
 
   def encode_image(self, input):
     image = utils.batch_convert2int(self.__call__(input))

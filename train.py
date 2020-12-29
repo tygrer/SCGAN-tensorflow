@@ -67,10 +67,10 @@ def train():
         beta1=FLAGS.beta1,
         ngf=FLAGS.ngf
     )
-    G_loss, D_Y_loss, F_loss, D_X_loss, g_atmospheric_loss, f_atmospheric_loss, dark_channel_loss, cycle_guided_loss,\
-    cycle_loss, G_gan_loss, F_gan_loss, G_l1_loss, F_l1_loss, fake_x, fake_y, atmospheric_loss_g, atmospheric_loss_f,\
+    G_loss, D_Y_loss, F_loss, D_X_loss, g_atmospheric_loss, dark_channel_loss, cycle_guided_loss,\
+    cycle_loss, G_gan_loss, F_gan_loss, G_l1_loss, F_l1_loss, fake_x, fake_y, atmospheric_loss_g,\
             foreground_g, foreground_f = cycle_gan.model()
-    optimizers = cycle_gan.optimize(G_loss, D_Y_loss, F_loss, D_X_loss, atmospheric_loss_g, atmospheric_loss_f)
+    optimizers = cycle_gan.optimize(G_loss, D_Y_loss, F_loss, D_X_loss, atmospheric_loss_g)
 
     summary_op = tf.summary.merge_all()
     train_writer = tf.summary.FileWriter(checkpoints_dir, graph)
@@ -100,11 +100,11 @@ def train():
         fake_y_val, fake_x_val = sess.run([fake_y, fake_x])
 
         # train
-        _,G_loss_val, D_Y_loss_val, F_loss_val, D_X_loss_val,  g_atmospheric_loss_val, f_atmospheric_loss_val, \
+        _,G_loss_val, D_Y_loss_val, F_loss_val, D_X_loss_val,  g_atmospheric_loss_val, \
         dark_channel_loss_val, cycle_guided_loss_val,\
     cycle_loss_val, G_gan_loss_val, F_gan_loss_val, G_l1_loss_val, F_l1_loss_val, foreground_g_val, foreground_f_val, summary = (
               sess.run(
-                  [optimizers,G_loss, D_Y_loss, F_loss, D_X_loss,  g_atmospheric_loss, f_atmospheric_loss,
+                  [optimizers,G_loss, D_Y_loss, F_loss, D_X_loss,  g_atmospheric_loss,
                    dark_channel_loss, cycle_guided_loss,
     cycle_loss, G_gan_loss, F_gan_loss, G_l1_loss, F_l1_loss, foreground_g, foreground_f, summary_op],
                   feed_dict={cycle_gan.fake_y: fake_Y_pool.query(fake_y_val),
@@ -121,7 +121,6 @@ def train():
           logging.info('  F_loss   : {}'.format(F_loss_val))
           logging.info('  D_F_loss : {}'.format(D_X_loss_val))
           logging.info('  g_atmospheric_loss : {}'.format(g_atmospheric_loss_val))
-          logging.info('  f_atmospheric_loss : {}'.format(f_atmospheric_loss_val))
           logging.info('  dark_channel_loss : {}'.format(dark_channel_loss_val))
           logging.info('  cycle_guided_loss : {}'.format(cycle_guided_loss_val))
           logging.info('  cycle_loss : {}'.format(cycle_loss_val))

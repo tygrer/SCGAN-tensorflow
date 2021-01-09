@@ -1,11 +1,11 @@
 import tensorflow as tf
-import ops
+
 import utils
 from reader import Reader
 from discriminator import Discriminator
 from generator import Generator
 from guided_filter import guided_filter
-
+from ops import *
 REAL_LABEL = 1
 
 class CycleGAN:
@@ -23,7 +23,8 @@ class CycleGAN:
                learning_rate=2e-4,
                is_training=True,
                beta1=0.5,
-               ngf=64
+               ngf=64,
+               gan_type='lsgan'
               ):
     """
     Args:
@@ -52,14 +53,15 @@ class CycleGAN:
     self.X_pair_train_file = X_pair_train_file
     self.Y_pair_train_file = Y_pair_train_file
     self.is_training = is_training
+    self.gan_type = gan_type
     with tf.device('/device:GPU:2'):
-      self.G = Generator('G', self.is_training, ngf=ngf, norm=norm, image_size=image_size)
+      self.G = Generator('Generator_X', self.is_training, ngf=ngf, norm=norm, image_size=image_size)
     with tf.device('/device:GPU:3'):
-      self.D_Y = Discriminator('D_Y',self.is_training, norm=norm, use_sigmoid=use_sigmoid)
+      self.D_Y = Discriminator('Discriminator_Y',self.is_training, norm=norm, use_sigmoid=use_sigmoid)
     with tf.device('/device:GPU:4'):
-      self.F = Generator('F', self.is_training, ngf=ngf, norm=norm, image_size=image_size)
+      self.F = Generator('Generator_Y', self.is_training, ngf=ngf, norm=norm, image_size=image_size)
     with tf.device('/device:GPU:5'):
-      self.D_X = Discriminator('D_X',
+      self.D_X = Discriminator('Discriminator_X',
       self.is_training, norm=norm, use_sigmoid=use_sigmoid)
 
     self.fake_x = tf.placeholder(tf.float32,
@@ -90,96 +92,162 @@ class CycleGAN:
     y_pair = Y_pair_reader.feed()
 
     # X -> Y
-    fake_y, real_x_dm, fake_y_dm, x_aestimate = self.G(x)
-    fake_y_pair, real_x_pair_dm, fake_y_pair_dm, x_pair_aestimate = self.G(x_pair)
-    G_l1_loss = self.pair_l1_loss(fake_y_pair,y_pair)
-    G_gan_loss = self.generator_loss(self.D_Y, fake_y, use_lsgan=self.use_lsgan)
-    t1_g, t2_g, g_atmospheric_loss = self.atmospheric_refine_loss_g(x, fake_y, x_aestimate)
-    restructx, _, restructx_dm, restructy_aestimate = self.F(fake_y)
-    #1_f, t2_f, f_atmospheric_loss_back = self.atmospheric_refine_loss_f(fake_y, restructx, restructy_aestimate)
-    D_Y_loss = self.discriminator_loss(self.D_Y, y, fake_y, use_lsgan=self.use_lsgan)
-    foreground_gt, foreground_restruction_gI,foreground_g_loss = self.only_limited_foreground_loss_g(x, fake_y, x_aestimate)
+    x_ab, in_dark_ab, out_dark_ab, Aab, cam_ab, heatmap_ab = self.G(x)  # real a
+    x_ba, in_dark_ba, out_dark_ba, Aba, cam_ba, heatmap_ba = self.F(y)  # real b
+    x_ab_pair, in_dark_ab_pair, out_dark_ab_pair, Aab_pair, cam_ab_pair, heatmap_ab_pair = self.G(x_pair)  # real a
+    x_aba, in_dark_aba, out_dark_aba, Aaba, cam_aba, heatmap_aba = self.F(x_ab)  # real b
+    x_bab, in_dark_bab, out_dark_bab, Abab, cam_bab, heatmap_bab = self.G(x_ba)  # real a
+    x_ba_pair, in_dark_ba_pair, out_dark_ba_pair, Aba_pair, cam_ba_pair, heatmap_ba_pair = self.F(y_pair)# real b
+
+    x_aa, in_dark_aa, out_dark_aa, Aaa, cam_aa, heatmap_aa = self.F(x)  # fake b
+    x_bb, in_dark_bb, out_dark_bb, Abb, cam_bb, heatmap_bb = self.G(y)   # fake a
+
+    real_A_logit, real_A_cam_logit, real_B_logit, real_B_cam_logit = self.discriminate_real(x,
+                                                                                            y)
+    fake_A_logit, fake_A_cam_logit, fake_B_logit, fake_B_cam_logit = self.discriminate_fake(x_ba, x_ab)
+
+    """ Define Loss """
+    if self.gan_type.__contains__('wgan') or self.gan_type == 'dragan':
+      GP_A, GP_CAM_A = self.gradient_panalty(real=x, fake=x_ba, scope="discriminator_A")
+      GP_B, GP_CAM_B = self.gradient_panalty(real=y, fake=x_ab, scope="discriminator_B")
+    else:
+      GP_A, GP_CAM_A = 0, 0
+      GP_B, GP_CAM_B = 0, 0
+
+    G_ad_loss_A = (generator_loss(self.gan_type, fake_A_logit) + generator_loss(self.gan_type, fake_A_cam_logit))
+    G_ad_loss_B = (generator_loss(self.gan_type, fake_B_logit) + generator_loss(self.gan_type, fake_B_cam_logit))
+
+    D_ad_loss_A = (discriminator_loss(self.gan_type, real_A_logit, fake_A_logit) + discriminator_loss(self.gan_type,
+                                                                                                      real_A_cam_logit,
+                                                                                                      fake_A_cam_logit) + GP_A + GP_CAM_A)
+    D_ad_loss_B = (discriminator_loss(self.gan_type, real_B_logit, fake_B_logit) + discriminator_loss(self.gan_type,
+                                                                                                      real_B_cam_logit,
+                                                                                                      fake_B_cam_logit) + GP_B + GP_CAM_B)
+    l1_A = L1_loss(x_ab_pair, y_pair)
+    l1_B = L1_loss(x_ba_pair, x_pair)
+    reconstruction_A = L1_loss(x_aba, x)  # reconstruction
+    reconstruction_B = L1_loss(x_bab, y)  # reconstruction
+
+    identity_A = L1_loss(x_aa, x)
+    identity_B = L1_loss(x_bb, y)
+
+    cam_A = cam_loss(source=cam_ba, non_source=cam_aa)
+    cam_B = cam_loss(source=cam_ab, non_source=cam_bb)
+
+    Generator_A_gan = G_ad_loss_A
+    Generator_A_cycle = 10 * reconstruction_B
+    Generator_A_identity = 10 * identity_A
+    Generator_A_cam = 10 * cam_A
+
+    Generator_B_gan =  G_ad_loss_B
+    Generator_B_cycle = 10 * reconstruction_A
+    Generator_B_identity = 10 * identity_B
+    Generator_B_cam = 10 * cam_B
+    cycle_guided_loss_A, cycle_guided_loss_B = self.guided_filter_consistency_loss(x_aba, x_bab, x, y)
+    dark_channel_loss_A, dark_channel_loss_B = self.dark_channel_loss(out_dark_aba, out_dark_bab, in_dark_ab, in_dark_ba)
+
+    self.Generator_A_loss = Generator_A_gan + Generator_A_cycle + Generator_A_identity + Generator_A_cam + \
+                       10*cycle_guided_loss_A + 10*dark_channel_loss_A + l1_A
+    self.Generator_B_loss = Generator_B_gan + Generator_B_cycle + Generator_B_identity + Generator_B_cam + \
+                       10*cycle_guided_loss_B + 10*dark_channel_loss_B + l1_B
+
+    self.Discriminator_A_loss = D_ad_loss_A
+    self.Discriminator_B_loss =  D_ad_loss_B
+
+
+    self.Generator_loss = self.Generator_A_loss + self.Generator_B_loss# + regularization_loss('Generator_')
+    self.Discriminator_loss = self.Discriminator_A_loss + self.Discriminator_B_loss #+ regularization_loss('Discriminator_')
+
+    """ Result Image """
+
+
+    t1_g, t2_g, g_atmospheric_loss = self.atmospheric_refine_loss_g(x, x_ab, Aab)
+    #t1_f, t2_f, f_atmospheric_loss_back = self.atmospheric_refine_loss_f(fake_y, restructx, restructy_aestimate)
+    foreground_gt, foreground_restruction_gI,foreground_g_loss = self.only_limited_foreground_loss_g(x, x_ab, Aab)
     #foreground_g_loss_back = self.only_limited_foreground_loss_f(fake_y, x, restructy_aestimate)
     only_limit_foreground_g_loss = foreground_g_loss #+ foreground_g_loss_back
-    restruct_loss, tt, aa = self.restruct_phscial_model(x, fake_y)
+    restruct_loss, tt, aa = self.restruct_phscial_model(x, x_aba)
     # Y -> X
-    fake_x, real_y_dm, fake_x_dm, y_aestimate = self.F(y)
-    restructy, _, restructy_dm, restructx_aestimate = self.G(fake_x)
-    fake_x_pair, real_y_pair_dm, fake_x_pair_dm, y_pair_aestimate = self.F(y_pair)
-    F_l1_loss = self.pair_l1_loss(fake_x_pair, x_pair)
-    F_gan_loss = self.generator_loss(self.D_X, fake_x, use_lsgan=self.use_lsgan)
+
     #1_f_1, t2_f_1, f_atmospheric_loss = self.atmospheric_refine_loss_f(y, fake_x, restructx_aestimate)
     #1_g_1, t2_g_1, g_atmospheric_loss_back = self.atmospheric_refine_loss_g(fake_x, restructy, restructx_aestimate)
-    D_X_loss = self.discriminator_loss(self.D_X, x, fake_x, use_lsgan=self.use_lsgan)
-    foreground_ft, foreground_restruction_fI, foreground_f_loss = self.only_limited_foreground_loss_f(y, fake_x, y_aestimate)
+
+    foreground_ft, foreground_restruction_fI, foreground_f_loss = self.only_limited_foreground_loss_f(y, x_ba, Aba)
     #foreground_f_loss_back = self.only_limited_foreground_loss_f(fake_x, y, restructx_aestimate)
     only_limit_foreground_f_loss = foreground_f_loss #+ foreground_f_loss_back
-    cycle_loss = self.cycle_consistency_loss(restructx, restructy, x, y)
-    cycle_guided_loss = self.guided_filter_consistency_loss(restructx, restructy, x, y)
-    dark_channel_loss = self.dark_channel_loss(restructx_dm, restructy_dm, real_x_dm, real_y_dm)
 
-    G_loss =  G_gan_loss + cycle_loss + cycle_guided_loss + G_l1_loss  + dark_channel_loss#+restruct_loss + only_limit_foreground_g_loss #+ g_atmospheric_loss + f_atmospheric_loss_back
-    F_loss = F_gan_loss + cycle_loss + cycle_guided_loss + F_l1_loss + dark_channel_loss #+ f_atmospheric_loss  + g_atmospheric_loss_back
+
+    # G_loss =  G_gan_loss + cycle_loss + cycle_guided_loss + G_l1_loss  + dark_channel_loss#+restruct_loss + only_limit_foreground_g_loss #+ g_atmospheric_loss + f_atmospheric_loss_back
+    # F_loss = F_gan_loss + cycle_loss + cycle_guided_loss + F_l1_loss + dark_channel_loss #+ f_atmospheric_loss  + g_atmospheric_loss_back
 
     atmospheric_loss_g = g_atmospheric_loss + restruct_loss + only_limit_foreground_g_loss  #+ f_atmospheric_loss_back
-    atmospheric_loss_f = only_limit_foreground_f_loss #+ g_atmospheric_loss_back
+    #atmospheric_loss_f = only_limit_foreground_f_loss #+ g_atmospheric_loss_back
     # summary
     #tf.summary.histogram('D_Y/true', self.D_Y(y,None))
     #tf.summary.histogram('D_Y/fake', self.D_Y(self.G(x),"NO_OPS"))
     #tf.summary.histogram('D_X/true', self.D_X(x,None))
     #tf.summary.histogram('D_X/fake', self.D_X(self.F(y),"NO_OPS"))
 
-    tf.summary.scalar('loss/G', G_gan_loss)
-    tf.summary.scalar('loss/D_Y', D_Y_loss)
-    tf.summary.scalar('loss/G_L', G_l1_loss)
-    tf.summary.scalar('loss/F', F_gan_loss)
-    tf.summary.scalar('loss/D_X', D_X_loss)
-    tf.summary.scalar('loss/F_L', F_l1_loss)
-    tf.summary.scalar('loss/cycle', cycle_loss)
-    tf.summary.scalar('loss/cycle_guided', cycle_guided_loss)
+    tf.summary.scalar('loss/G', Generator_A_gan)
+    tf.summary.scalar('loss/D_Y', self.Discriminator_A_loss)
+    tf.summary.scalar('loss/G_L', l1_A)
+    tf.summary.scalar('loss/G_identity', Generator_A_identity)
+    tf.summary.scalar('loss/G_cam', Generator_A_cam)
+    tf.summary.scalar('loss/F', Generator_B_gan)
+    tf.summary.scalar('loss/D_X', self.Discriminator_B_loss)
+    tf.summary.scalar('loss/F_L', l1_B)
+    tf.summary.scalar('loss/F_identity', Generator_B_identity)
+    tf.summary.scalar('loss/F_cam', Generator_B_cam)
+    tf.summary.scalar('loss/cycle_A', Generator_A_cycle)
+    tf.summary.scalar('loss/cycle_B', Generator_B_cycle)
+    tf.summary.scalar('loss/cycle_guided_A', cycle_guided_loss_A)
+    tf.summary.scalar('loss/cycle_guided_B', cycle_guided_loss_B)
     tf.summary.scalar('loss/g_atmospheric_loss', g_atmospheric_loss)
     #tf.summary.scalar('loss/f_atmospheric_loss', f_atmospheric_loss)
-    tf.summary.scalar('loss/dark_channel_loss', dark_channel_loss)
+    tf.summary.scalar('loss/dark_channel_loss_A', dark_channel_loss_A)
+    tf.summary.scalar('loss/dark_channel_loss_B', dark_channel_loss_B)
     tf.summary.scalar('loss/only_limit_foreground_g_loss', only_limit_foreground_g_loss)
     tf.summary.scalar('loss/only_limit_foreground_f_loss', only_limit_foreground_f_loss)
     tf.summary.scalar('loss/restruct_loss', restruct_loss)
 
-    tf.summary.image('X/darkmap', utils.batch_convert2int(real_x_dm))
-    tf.summary.image('Y/gen_darkmap', utils.batch_convert2int(fake_x_dm))
-    tf.summary.image('X/generated', utils.batch_convert2int(fake_y))
-    tf.summary.image('X/restru_darkmap', utils.batch_convert2int(restructx_dm))
-    tf.summary.image('X/reconstruction', utils.batch_convert2int(restructx))
+    tf.summary.image('X/darkmap', utils.batch_convert2int(in_dark_ab))
+    tf.summary.image('Y/gen_darkmap', utils.batch_convert2int(out_dark_ab))
+    tf.summary.image('X/generated', utils.batch_convert2int(x_ab))
+    tf.summary.image('X/restru_darkmap', utils.batch_convert2int(in_dark_aba))
+    tf.summary.image('X/reconstruction', utils.batch_convert2int(x_aba))
     tf.summary.image('X/fake_refine_x', utils.batch_convert2int(self.fake_refinex))
     tf.summary.image('X/t1', utils.batch_convert2int((t1_g)))
     tf.summary.image('X/t2', utils.batch_convert2int((t2_g)))
-    tf.summary.image('X/A', utils.batch_convert2int((x_aestimate)))
+    tf.summary.image('X/A', utils.batch_convert2int((Aab)))
     tf.summary.image('X/restruct_t',utils.batch_convert2int((tt)))
     tf.summary.image('X/restruct_A',utils.batch_convert2int(aa))
     tf.summary.image('X/pair', utils.batch_convert2int(x_pair))
     tf.summary.image('X/forgroundgt', utils.batch_convert2int(foreground_gt))
     tf.summary.image('X/forgroundg_RI_t', utils.batch_convert2int(foreground_restruction_gI))
     tf.summary.image('Y/pair', utils.batch_convert2int(y_pair))
-    tf.summary.image('Y/darkmap', utils.batch_convert2int(real_y_dm))
-    tf.summary.image('X/gen_darkmap', utils.batch_convert2int(fake_y_dm))
-    tf.summary.image('Y/generated', utils.batch_convert2int(fake_x))
-    tf.summary.image('Y/restru_darkmap', utils.batch_convert2int(restructy_dm))
-    tf.summary.image('Y/reconstruction', utils.batch_convert2int(restructy))
+    tf.summary.image('Y/darkmap', utils.batch_convert2int(in_dark_ba))
+    tf.summary.image('X/gen_darkmap', utils.batch_convert2int(out_dark_ba))
+    tf.summary.image('Y/generated', utils.batch_convert2int(x_ba))
+    tf.summary.image('Y/restru_darkmap', utils.batch_convert2int(out_dark_bab))
+    tf.summary.image('Y/reconstruction', utils.batch_convert2int(x_bab))
     tf.summary.image('Y/fake_refine_Y', utils.batch_convert2int(self.fake_refiney))
     #tf.summary.image('Y/t1', utils.batch_convert2int((t1_f_1)))
     #tf.summary.image('Y/t2', utils.batch_convert2int((t2_f_1)))
-    tf.summary.image('Y/A', utils.batch_convert2int((y_aestimate)))
+    tf.summary.image('Y/A', utils.batch_convert2int((Aba)))
     tf.summary.image('Y/forgroundft', utils.batch_convert2int(foreground_ft))
     tf.summary.image('Y/forgroundg_RI_t', utils.batch_convert2int(foreground_restruction_fI))
     self.get_vars()
     print('sigma_ratio_vars', self.sigma_ratio_vars)
     for var in self.sigma_ratio_vars:
        tf.summary.scalar(var.name, var)
-    return G_loss, D_Y_loss, F_loss, D_X_loss, g_atmospheric_loss, dark_channel_loss,\
-           cycle_guided_loss,cycle_loss,G_gan_loss,F_gan_loss,G_l1_loss,F_l1_loss,fake_x,fake_y, \
+    return self.Generator_loss,  self.Discriminator_loss ,x_ab,x_ba, \
            atmospheric_loss_g,only_limit_foreground_g_loss,only_limit_foreground_f_loss
 
 
-  def optimize(self, G_loss, D_Y_loss, F_loss, D_X_loss, atmospheric_loss_g):
+  def optimize(self, G_loss, D_loss, atmospheric_loss_g):
+    #t_vars = tf.trainable_variables()
+    #G_vars = [var for var in t_vars if 'Generator_' in var.name]
+    #D_vars = [var for var in t_vars if 'Discriminator_' in var.name]
     def make_optimizer_G(loss, variables, atmospheric_loss=None, name='Adam'):
       """ Adam optimizer with learning rate 0.0002 for the first 100k steps (~100 epochs)
           and a linearly decaying rate that goes to zero over the next 100k steps
@@ -189,7 +257,7 @@ class CycleGAN:
       end_learning_rate = 0.0
       start_decay_step = 1000
       decay_steps = 5000
-      start_atmospheric_step =90000
+      start_atmospheric_step = 90000000000
       beta1 = self.beta1
       learning_rate = (
           tf.where(
@@ -217,7 +285,7 @@ class CycleGAN:
       )
       '''
       if atmospheric_loss is not None:
-        learning_step = (tf.cond(global_step>start_atmospheric_step,
+        learning_step = (tf.cond(tf.greater_equal(global_step, start_atmospheric_step),
           lambda:tf.train.AdamOptimizer(learning_rate, beta1=beta1, name=name + 'at')
             .minimize(loss+atmospheric_loss, global_step=global_step, var_list=variables),
           lambda:tf.train.AdamOptimizer(learning_rate, beta1=beta1, name=name + 'at')
@@ -230,6 +298,7 @@ class CycleGAN:
             .minimize(loss, global_step=global_step, var_list=variables)
         )
       return learning_step
+
     def make_optimizer_D(loss, variables, name='Adam'):
       """ Adam optimizer with learning rate 0.0002 for the first 100k steps (c~100 epochs)
           and a linearly decaying rate that goes to zero over the next 100k steps
@@ -255,20 +324,17 @@ class CycleGAN:
       )
       return learning_step
 
-    G_optimizer  = make_optimizer_G(G_loss, self.G.variables, atmospheric_loss_g, name='Adam_G')
-    F_optimizer  =  make_optimizer_G(F_loss, self.F.variables, None, name='Adam_F')
-    D_Y_optimizer = make_optimizer_D(D_Y_loss, self.D_Y.variables, name='Adam_D_Y')
-    D_X_optimizer = make_optimizer_D(D_X_loss, self.D_X.variables, name='Adam_D_X')
-    #G_optimizer = make_optimizer_D(G_loss, self.G.variables, name='Adam_G_Y')
-    #F_optimizer = make_optimizer_D(F_loss, self.F.variables,name='Adam_F_X')
-  #G_optimizer2 = make_optimizer(G_loss, self.G.variables, name='Adam_G')
+    D_x_optimizer  = make_optimizer_D(self.Discriminator_A_loss, self.D_X.variables,  name='Adam_D_X')
+    D_y_optimizer = make_optimizer_D(self.Discriminator_B_loss, self.D_Y.variables, name='Adam_D_Y')
+    G_optimizer = make_optimizer_G(self.Generator_A_loss, self.G.variables, None, name='Adam_G_Y')
+    F_optimizer = make_optimizer_G(self.Generator_B_loss, self.F.variables, None, name='Adam_F_X')
 
 
   #F_optimizer2 = make_optimizer(F_loss, self.F.variables, name='Adam_F')
 
     #with tf.control_dependencies([G_optimizer1, D_Y_optimizer, F_optimizer1, D_X_optimizer, G_optimizer2, F_optimizer2]):
     with tf.control_dependencies(
-         [G_optimizer, D_Y_optimizer, F_optimizer, D_X_optimizer]):
+         [G_optimizer, F_optimizer, D_x_optimizer, D_y_optimizer]):
     #with tf.control_dependencies([D_Y_optimizer, D_X_optimizer, G_optimizer, F_optimizer]):
 
       return tf.no_op(name='optimizers')
@@ -292,8 +358,8 @@ class CycleGAN:
       error_fake = tf.reduce_mean(tf.square(D(fake_y,"NO_OPS")))
     else:
       # use cross entropy
-      error_real = -tf.reduce_mean(ops.safe_log(D(y,None)))
-      error_fake = -tf.reduce_mean(ops.safe_log(1-D(fake_y,"NO_OPS")))
+      error_real = -tf.reduce_mean(safe_log(D(y,None)))
+      error_fake = -tf.reduce_mean(safe_log(1-D(fake_y,"NO_OPS")))
     loss = (error_real + error_fake) / 2
     return loss
 
@@ -305,7 +371,7 @@ class CycleGAN:
       loss = tf.reduce_mean(tf.squared_difference(D(fake_y,"NO_OPS"), REAL_LABEL))
     else:
       # heuristic, non-saturating loss
-      loss = -tf.reduce_mean(ops.safe_log(D(fake_y,"NO_OPS"))) / 2
+      loss = -tf.reduce_mean(safe_log(D(fake_y,"NO_OPS"))) / 2
     return loss
 
   def cycle_consistency_loss(self, rx, ry, x, y):
@@ -333,8 +399,7 @@ class CycleGAN:
     backward_loss_color_y = tf.reduce_mean(tf.abs(y - self.fake_refiney))
     forward_loss = forward_loss_color_x+ forward_loss_edge_x
     backward_loss = backward_loss_color_y + backward_loss_edge_y
-    loss = self.lambda1*forward_loss + self.lambda2*backward_loss
-    return loss
+    return forward_loss, backward_loss
 
   def pair_l1_loss(self, fake, gt):
     l1 = tf.reduce_mean(tf.abs(gt-fake))*5
@@ -416,13 +481,13 @@ class CycleGAN:
     a = tf.clip_by_value(self.protect_value(a), -1, 1)
     J = tf.clip_by_value(self.protect_value(J), -1, 1)
     I = tf.clip_by_value(self.protect_value(I), -1, 1)
-    I_dm= ops.dark_channel(tf.divide(0.5*I+0.5, 0.5*a+0.5))
-    J_dm = ops.dark_channel(tf.divide(0.5*J+0.5, 0.5*a+0.5))
+    I_dm= dark_channel(tf.divide(0.5*I+0.5, 0.5*a+0.5))
+    J_dm = dark_channel(tf.divide(0.5*J+0.5, 0.5*a+0.5))
     return I_dm, J_dm
 
   def dark_channel_foreground_transmission(self, I, a):
     #a = tf.clip_by_value(self.protect_value(a), -1, 1)
-    I_dm= ops.dark_channel(tf.divide(0.5*I+0.5, 0.5*a+0.5))
+    I_dm= dark_channel(tf.divide(0.5*I+0.5, 0.5*a+0.5))
     t = 1 - 0.95*I_dm
     fake_dm = tf.concat([t, t, t], axis=-1)
     r = 4
@@ -434,8 +499,8 @@ class CycleGAN:
   def dark_channel_loss(self, res_x, res_y, real_x, real_y):
     forward_dark_loss = tf.reduce_mean(tf.abs(real_x - res_x))
     backward_dark_loss = tf.reduce_mean(tf.abs(real_y - res_y))
-    dark_loss = 10 * forward_dark_loss + 10 * backward_dark_loss
-    return dark_loss
+    #dark_loss = 10 * forward_dark_loss + 10 * backward_dark_loss
+    return forward_dark_loss, backward_dark_loss
 
   def protect_value(self, t):
     signt = tf.sign(t)
@@ -462,3 +527,56 @@ class CycleGAN:
     loss = tf.reduce_mean(tf.abs(tf.multiply((0.5*J+0.5), t)+tf.multiply((1-t), (0.5*a+0.5)) - (0.5*I+0.5)))
     return loss, t, a
 
+  def gradient_panalty(self, real, fake, scope="discriminator_A"):
+        if self.gan_type.__contains__('dragan'):
+            eps = tf.random_uniform(shape=tf.shape(real), minval=0., maxval=1.)
+            _, x_var = tf.nn.moments(real, axes=[0, 1, 2, 3])
+            x_std = tf.sqrt(x_var)  # magnitude of noise decides the size of local region
+
+            fake = real + 0.5 * x_std * eps
+
+        alpha = tf.random_uniform(shape=[self.batch_size, 1, 1, 1], minval=0., maxval=1.)
+        interpolated = real + alpha * (fake - real)
+
+        logit, cam_logit, _, _ = self.discriminator(interpolated, reuse=True, scope=scope)
+
+
+        GP = []
+        cam_GP = []
+
+        for i in range(2) :
+            grad = tf.gradients(logit[i], interpolated)[0] # gradient of D(interpolated)
+            grad_norm = tf.norm(flatten(grad), axis=1) # l2 norm
+
+            # WGAN - LP
+            if self.gan_type == 'wgan-lp' :
+                GP.append(self.ld * tf.reduce_mean(tf.square(tf.maximum(0.0, grad_norm - 1.))))
+
+            elif self.gan_type == 'wgan-gp' or self.gan_type == 'dragan':
+                GP.append(self.ld * tf.reduce_mean(tf.square(grad_norm - 1.)))
+
+        for i in range(2) :
+            grad = tf.gradients(cam_logit[i], interpolated)[0] # gradient of D(interpolated)
+            grad_norm = tf.norm(flatten(grad), axis=1) # l2 norm
+
+            # WGAN - LP
+            if self.gan_type == 'wgan-lp' :
+                cam_GP.append(self.ld * tf.reduce_mean(tf.square(tf.maximum(0.0, grad_norm - 1.))))
+
+            elif self.gan_type == 'wgan-gp' or self.gan_type == 'dragan':
+                cam_GP.append(self.ld * tf.reduce_mean(tf.square(grad_norm - 1.)))
+
+
+        return sum(GP), sum(cam_GP)
+
+  def discriminate_real(self, x_A, x_B):
+    real_A_logit, real_A_cam_logit, _, _ = self.D_X(x_A)
+    real_B_logit, real_B_cam_logit, _, _ = self.D_Y(x_B)
+
+    return real_A_logit, real_A_cam_logit, real_B_logit, real_B_cam_logit
+
+  def discriminate_fake(self, x_ba, x_ab):
+    fake_A_logit, fake_A_cam_logit, _, _ = self.D_X(x_ba)
+    fake_B_logit, fake_B_cam_logit, _, _ = self.D_Y(x_ab)
+
+    return fake_A_logit, fake_A_cam_logit, fake_B_logit, fake_B_cam_logit

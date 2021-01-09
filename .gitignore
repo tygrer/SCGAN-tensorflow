@@ -100,4 +100,6 @@ pretrained
 # temp file
 convert_all.sh
 
+.xml
+
 *.xml

@@ -121,7 +121,7 @@ def train():
 
           logging.info('  G_foreground_loss ： {}'.format(foreground_g_val))
           logging.info('  f_foreground_loss ： {}'.format(foreground_f_val))
-        if step % 3000 == 0:
+        if step % 1000 == 0:
             train_writer.add_summary(summary, step)
             train_writer.flush()
             save_path = saver.save(sess, checkpoints_dir + "/model.ckpt", global_step=step)

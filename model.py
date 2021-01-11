@@ -134,22 +134,22 @@ class CycleGAN:
     cam_A = cam_loss(source=cam_ba, non_source=cam_aa)
     cam_B = cam_loss(source=cam_ab, non_source=cam_bb)
 
-    Generator_A_gan = G_ad_loss_A
-    Generator_A_cycle = 10 * reconstruction_B
-    Generator_A_identity = 10 * identity_A
-    Generator_A_cam = 10 * cam_A
+    Generator_A_gan = 10*G_ad_loss_A
+    Generator_A_cycle = 20 * reconstruction_B
+    Generator_A_identity = 10*identity_A
+    Generator_A_cam = 0.1 * cam_A
 
-    Generator_B_gan =  G_ad_loss_B
-    Generator_B_cycle = 10 * reconstruction_A
-    Generator_B_identity = 10 * identity_B
-    Generator_B_cam = 10 * cam_B
+    Generator_B_gan =  10*G_ad_loss_B
+    Generator_B_cycle = 20 * reconstruction_A
+    Generator_B_identity =  10*identity_B
+    Generator_B_cam = 0.1 * cam_B
     cycle_guided_loss_A, cycle_guided_loss_B = self.guided_filter_consistency_loss(x_aba, x_bab, x, y)
     dark_channel_loss_A, dark_channel_loss_B = self.dark_channel_loss(out_dark_aba, out_dark_bab, in_dark_ab, in_dark_ba)
 
     self.Generator_A_loss = Generator_A_gan + Generator_A_cycle + Generator_A_identity + Generator_A_cam + \
-                       10*cycle_guided_loss_A + 10*dark_channel_loss_A + l1_A
+                       10*cycle_guided_loss_A + 10*dark_channel_loss_A + 10*l1_A
     self.Generator_B_loss = Generator_B_gan + Generator_B_cycle + Generator_B_identity + Generator_B_cam + \
-                       10*cycle_guided_loss_B + 10*dark_channel_loss_B + l1_B
+                       10*cycle_guided_loss_B + 10*dark_channel_loss_B + 10*l1_B
 
     self.Discriminator_A_loss = D_ad_loss_A
     self.Discriminator_B_loss =  D_ad_loss_B

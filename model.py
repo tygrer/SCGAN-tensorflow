@@ -147,9 +147,9 @@ class CycleGAN:
     dark_channel_loss_A, dark_channel_loss_B = self.dark_channel_loss(out_dark_aba, out_dark_bab, in_dark_ab, in_dark_ba)
 
     self.Generator_A_loss = Generator_A_gan + Generator_A_cycle + Generator_A_identity + Generator_A_cam + \
-                       10*cycle_guided_loss_A + 10*dark_channel_loss_A + 10*l1_A
+                       10*cycle_guided_loss_A + 10*dark_channel_loss_A #+ 10*l1_A
     self.Generator_B_loss = Generator_B_gan + Generator_B_cycle + Generator_B_identity + Generator_B_cam + \
-                       10*cycle_guided_loss_B + 10*dark_channel_loss_B + 10*l1_B
+                       10*cycle_guided_loss_B + 10*dark_channel_loss_B #+ 10*l1_B
 
     self.Discriminator_A_loss = D_ad_loss_A
     self.Discriminator_B_loss =  D_ad_loss_B

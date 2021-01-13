@@ -27,9 +27,9 @@ tf.flags.DEFINE_float('pool_size', 50,
 tf.flags.DEFINE_integer('ngf', 64,
                         'number of gen filters in first conv layer, default: 64')
 tf.flags.DEFINE_string('gan_type', 'lsgan', 'help=[gan / lsgan / wgan-gp / wgan-lp / dragan / hinge]')
-tf.flags.DEFINE_string('X', 'data/trainA.tfrecords',
+tf.flags.DEFINE_string('X', 'data/hazebig.tfrecords',
                        'X tfrecords file for training, default: data/tfrecords/apple.tfrecords')
-tf.flags.DEFINE_string('Y', 'data/trainB.tfrecords',
+tf.flags.DEFINE_string('Y', 'data/clearbig.tfrecords',
                        'Y tfrecords file for training, default: data/tfrecords/orange.tfrecords')
 tf.flags.DEFINE_string('X_pair', 'align/haze.tfrecords',
                        'X tfrecords file for training, default: data/tfrecords/apple.tfrecords')

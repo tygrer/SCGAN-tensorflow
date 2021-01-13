@@ -20,19 +20,19 @@ class Generator:
     """
     with tf.variable_scope(self.name):
       # conv layers
-      in_darkmap = ops.dark_channel(input)
-      input_n = tf.concat([input, in_darkmap], axis=-1)
-      c7s1_32 = ops.c7s1_k(input, self.ngf, is_training=self.is_training, norm=self.norm,
+      in_darkmap = ops.color_diff(input)
+      in_darkmap = tf.concat([in_darkmap,in_darkmap, in_darkmap], axis=-1)
+      c7s1_32, in_darkmap_c7 = ops.c7s1_k_dm(input, in_darkmap, self.ngf, is_training=self.is_training, norm=self.norm,
           reuse=self.reuse, name='c7s1_32')
       # (?, w, h, 32)
-      d64 = ops.dk(c7s1_32, 2*self.ngf, is_training=self.is_training, norm=self.norm,
+      d64, in_darkmap_d64 = ops.dk_dm(c7s1_32, in_darkmap_c7, 2*self.ngf, is_training=self.is_training, norm=self.norm,
           reuse=self.reuse, name='d64')
-      ars = ops.n_res_blocks(d64, reuse=self.reuse, n=2, is_training=self.is_training)
+      #ars = ops.n_res_blocks(d64, reuse=self.reuse, n=2, is_training=self.is_training)
 
-      art = ops.uk(ars, 3, is_training=self.is_training, norm=self.norm,
-         reuse=self.reuse, name='a_u3')  # (?, w, h, 3)
-      aestimate,_ = non_local.sn_non_local_block_sim_attention(art, in_darkmap, None, reuse=self.reuse, name='at_non_local')
-      d128 = ops.dk(d64, 4*self.ngf, is_training=self.is_training, norm=self.norm,
+      #art = ops.uk(ars, 3, is_training=self.is_training, norm=self.norm,
+      #   reuse=self.reuse, name='a_u3')  # (?, w, h, 3)
+      aestimate,_ = non_local.sn_non_local_block_sim_attention(d64, in_darkmap_d64, None, reuse=self.reuse, name='at_non_local')
+      d128 = ops.dk(aestimate, 4*self.ngf, is_training=self.is_training, norm=self.norm,
           reuse=self.reuse, name='d128')                                # (?, w/4, h/4, 128)
 
       #res_output,_ = non_local.sn_non_local_block_sim_self(d128, None, reuse=self.reuse, name='g_non_local')
@@ -66,7 +66,8 @@ class Generator:
         # 9 blocks for higher resolution
         res_output = ops.n_res_blocks(d128, reuse=self.reuse, n=9, is_training=self.is_training)  # (?, w/4, h/4, 128)
 
-
+      #aestimate, _ = non_local.sn_non_local_block_sim_attention(res_output, in_darkmap, None, reuse=self.reuse,
+       #                                                         name='at_non_local')
       # fractional-strided convolution
       #res_output_mix = ops.cat_two_channel(res_output, d128, 4 * self.ngf, reuse=self.reuse, name='res_cat',norm=self.norm, is_training=self.is_training)
       u64 = ops.uk(res_output, 2*self.ngf, is_training=self.is_training, norm=self.norm,
@@ -80,7 +81,7 @@ class Generator:
       # but actually tanh was used and no _norm here
       output = ops.c7s1_k(u32, 3, norm=None,
           activation='tanh', reuse=self.reuse, name='output')           # (?, w, h, 3)
-      out_darkmap = ops.dark_channel(output)
+      out_darkmap = ops.color_diff(output)
     # set reuse=True for next call
     self.reuse = True
     self.variables = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope=self.name)

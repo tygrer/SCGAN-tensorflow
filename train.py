@@ -27,9 +27,9 @@ tf.flags.DEFINE_float('pool_size', 50,
 tf.flags.DEFINE_integer('ngf', 64,
                         'number of gen filters in first conv layer, default: 64')
 
-tf.flags.DEFINE_string('X', 'data/trainA.tfrecords',
+tf.flags.DEFINE_string('X', 'data/hazebig.tfrecords',
                        'X tfrecords file for training, default: data/tfrecords/apple.tfrecords')
-tf.flags.DEFINE_string('Y', 'data/trainB.tfrecords',
+tf.flags.DEFINE_string('Y', 'data/clearbig.tfrecords',
                        'Y tfrecords file for training, default: data/tfrecords/orange.tfrecords')
 tf.flags.DEFINE_string('X_pair', 'align/haze.tfrecords',
                        'X tfrecords file for training, default: data/tfrecords/apple.tfrecords')
@@ -130,7 +130,7 @@ def train():
           logging.info('  F_l1_loss : {}'.format(F_l1_loss_val))
           logging.info('  G_foreground_loss ： {}'.format(foreground_g_val))
           logging.info('  f_foreground_loss ： {}'.format(foreground_f_val))
-        if step % 3000 == 0:
+        if step % 1000 == 0:
             train_writer.add_summary(summary, step)
             train_writer.flush()
             save_path = saver.save(sess, checkpoints_dir + "/model.ckpt", global_step=step)

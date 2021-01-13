@@ -82,14 +82,49 @@ def c7s1_k(input, k, reuse=False, norm='instance', activation='relu', is_trainin
         strides=[1, 1, 1, 1], padding='VALID')
 
     normalized = _norm(conv, is_training, norm)
-
     if activation == 'relu':
       output = tf.nn.relu(normalized)
     if activation == 'tanh':
       output = tf.nn.tanh(normalized)
     return output
 
-def dk(input, k, reuse=False, norm='instance', is_training=True, name=None):
+def c7s1_k_dm(input, in_darkmap, k, reuse=False, norm='instance', activation='relu', is_training=True, name='c7s1_k'):
+  """ A 7x7 Convolution-BatchNorm-ReLU layer with k filters and stride 1
+  Args:
+    input: 4D tensor
+    k: integer, number of filters (output depth)
+    norm: 'instance' or 'batch' or None
+    activation: 'relu' or 'tanh'
+    name: string, e.g. 'c7sk-32'
+    is_training: boolean or BoolTensor
+    name: string
+    reuse: boolean
+  Returns:
+    4D tensor
+  """
+  with tf.variable_scope(name, reuse=reuse):
+    weights = _weights("weights",
+      shape=[7, 7, input.get_shape()[3], k])
+
+    padded = tf.pad(input, [[0,0],[3,3],[3,3],[0,0]], 'REFLECT')
+    conv = tf.nn.conv2d(padded, weights,
+        strides=[1, 1, 1, 1], padding='VALID')
+
+    normalized = _norm(conv, is_training, norm)
+    padded_dm = tf.pad(in_darkmap, [[0,0],[3,3],[3,3],[0,0]], 'REFLECT')
+    conv_dm = tf.nn.conv2d(padded_dm, weights,
+        strides=[1, 1, 1, 1], padding='VALID')
+
+    normalized_dm = _norm(conv_dm, is_training, norm, reuse=True)
+    if activation == 'relu':
+      output = tf.nn.relu(normalized)
+      output_dm = tf.nn.relu(normalized_dm)
+    if activation == 'tanh':
+      output = tf.nn.tanh(normalized)
+      output_dm = tf.nn.relu(normalized_dm)
+    return output, output_dm
+
+def dk_dm(input, in_darkmap, k, reuse=False, norm='instance', is_training=True, name=None):
   """ A 3x3 Convolution-BatchNorm-ReLU layer with k filters and stride 2
   Args:
     input: 4D tensor
@@ -108,6 +143,34 @@ def dk(input, k, reuse=False, norm='instance', is_training=True, name=None):
 
     conv = tf.nn.conv2d(input, weights,
         strides=[1, 2, 2, 1], padding='SAME')
+    normalized = _norm(conv, is_training, norm)
+    output = tf.nn.relu(normalized)
+
+    conv_dm = tf.nn.conv2d(in_darkmap, weights,
+        strides=[1, 2, 2, 1], padding='SAME')
+    normalized_dm = _norm(conv_dm, is_training, reuse=True)
+    output_dm = tf.nn.relu(normalized_dm)
+    return output, output_dm
+
+def dk(input, k, reuse=False, norm='instance', is_training=True, name=None):
+  """ A 3x3 Convolution-BatchNorm-ReLU layer with k filters and stride 2
+  Args:
+    input: 4D tensor
+    k: integer, number of filters (output depth)
+    norm: 'instance' or 'batch' or None
+    is_training: boolean or BoolTensor
+    name: string
+    reuse: boolean
+    name: string, e.g. 'd64'
+  Returns:
+    4D tensor
+  """
+  with tf.variable_scope(name, reuse=reuse):
+    weights = _weights("weights",
+                       shape=[3, 3, input.get_shape()[3], k])
+
+    conv = tf.nn.conv2d(input, weights,
+                        strides=[1, 2, 2, 1], padding='SAME')
     normalized = _norm(conv, is_training, norm)
     output = tf.nn.relu(normalized)
     return output
@@ -229,6 +292,36 @@ def Ck(input, k, slope=0.2, stride=2, reuse=False, norm='instance', is_training=
     output = _leaky_relu(normalized, slope)
     return output
 
+def Ck_dm(input, input_dm, k, slope=0.2, stride=2, reuse=False, norm='instance', is_training=True, name=None, update_collection=None):
+  """ A 4x4 Convolution-BatchNorm-LeakyReLU layer with k filters and stride 2
+  Args:
+    input: 4D tensor
+    k: integer, number of filters (output depth)
+    slope: LeakyReLU's slope
+    stride: integer
+    norm: 'instance' or 'batch' or None
+    is_training: boolean or BoolTensor
+    reuse: boolean
+    name: string, e.g. 'C64'
+  Returns:
+    4D tensor
+  """
+  with tf.variable_scope(name, reuse=reuse):
+    weights = _weights("weights",
+      shape=[4, 4, input.get_shape()[3], k], update_collection=update_collection)
+
+    conv = tf.nn.conv2d(input, weights,
+        strides=[1, stride, stride, 1], padding='SAME')
+
+    normalized = _norm(conv, is_training, norm)
+    output = _leaky_relu(normalized, slope)
+    conv_dm = tf.nn.conv2d(input_dm, weights,
+                        strides=[1, stride, stride, 1], padding='SAME')
+
+    normalized_dm = _norm(conv_dm, is_training, norm, reuse=True)
+    output_dm = _leaky_relu(normalized_dm, slope)
+    return output, output_dm
+
 def last_conv(input, reuse=False, use_sigmoid=False, name=None, is_training=True):
   """ Last convolutional layer of discriminator network
       (1 filter with size 4x4, stride 1)
@@ -278,11 +371,11 @@ def _biases(name, shape, constant=0.0):
 def _leaky_relu(input, slope):
   return tf.maximum(slope*input, input)
 
-def _norm(input, is_training, norm='instance'):
+def _norm(input, is_training, norm='instance',reuse=False):
   """ Use Instance Normalization or Batch Normalization or None
   """
   if norm == 'instance':
-    return _instance_norm(input,is_training)
+    return _instance_norm(input,reuse)
   elif norm == 'batch':
     return _batch_norm(input, is_training)
   else:
@@ -298,10 +391,10 @@ def _batch_norm(input, is_training):
                                         updates_collections=None,
                                         is_training=is_training)
 
-def _instance_norm(input,is_training):
+def _instance_norm(input,reuse=False):
   """ Instance Normalization
   """
-  with tf.variable_scope("instance_norm"):
+  with tf.variable_scope("instance_norm", reuse=reuse):
     depth = input.get_shape()[3]
     scale = _weights("scale", [depth], mean=1.0)
     offset = _biases("offset", [depth])
@@ -318,3 +411,15 @@ def dark_channel(input):
   rgb_min = tf.reduce_min(input, -1, keep_dims=True)
   dark_map=-tf.nn.max_pool(-rgb_min,[1,5,5,1],[1, 1, 1 ,1],"SAME")
   return dark_map
+
+def dark_channel_try(input):
+  rgb_min = tf.reduce_min(input, -1, keep_dims=True)
+
+  return rgb_min
+
+def color_diff(input):
+  rgb_min = tf.reduce_min(input, -1, keep_dims=True)
+  rgb_max = tf.reduce_max(input, -1, keep_dims=True)
+  diff= 1 - rgb_max + rgb_min
+
+  return diff

@@ -118,8 +118,8 @@ class CycleGAN:
     cycle_guided_loss = self.guided_filter_consistency_loss(restructx, restructy, x, y)
     dark_channel_loss = self.dark_channel_loss(restructx_dm, restructy_dm, real_x_dm, real_y_dm)
 
-    G_loss =  G_gan_loss + cycle_loss + cycle_guided_loss + G_l1_loss  + dark_channel_loss#+restruct_loss + only_limit_foreground_g_loss #+ g_atmospheric_loss + f_atmospheric_loss_back
-    F_loss = F_gan_loss + cycle_loss + cycle_guided_loss + F_l1_loss + dark_channel_loss #+ f_atmospheric_loss  + g_atmospheric_loss_back
+    G_loss =  G_gan_loss + cycle_loss + cycle_guided_loss #+ G_l1_loss  #+ dark_channel_loss#+restruct_loss + only_limit_foreground_g_loss #+ g_atmospheric_loss + f_atmospheric_loss_back
+    F_loss = F_gan_loss + cycle_loss + cycle_guided_loss #+ F_l1_loss #+ dark_channel_loss #+ f_atmospheric_loss  + g_atmospheric_loss_back
 
     atmospheric_loss_g = g_atmospheric_loss + restruct_loss + only_limit_foreground_g_loss  #+ f_atmospheric_loss_back
     atmospheric_loss_f = only_limit_foreground_f_loss #+ g_atmospheric_loss_back
@@ -187,8 +187,8 @@ class CycleGAN:
       global_step = tf.Variable(0, trainable=False)
       starter_learning_rate = self.learning_rate
       end_learning_rate = 0.0
-      start_decay_step = 1000
-      decay_steps = 5000
+      start_decay_step = 10000
+      decay_steps = 30000
       start_atmospheric_step =90000
       beta1 = self.beta1
       learning_rate = (
@@ -236,8 +236,8 @@ class CycleGAN:
       """
       global_step = tf.Variable(0, trainable=False)
       starter_learning_rate = self.learning_rate
-      start_decay_step = 1000
-      decay_steps = 5000
+      start_decay_step = 10000
+      decay_steps = 30000
       beta1 = self.beta1
       learning_rate = (
           tf.where(
@@ -255,7 +255,7 @@ class CycleGAN:
       )
       return learning_step
 
-    G_optimizer  = make_optimizer_G(G_loss, self.G.variables, atmospheric_loss_g, name='Adam_G')
+    G_optimizer  = make_optimizer_G(G_loss, self.G.variables, None, name='Adam_G')
     F_optimizer  =  make_optimizer_G(F_loss, self.F.variables, None, name='Adam_F')
     D_Y_optimizer = make_optimizer_D(D_Y_loss, self.D_Y.variables, name='Adam_D_Y')
     D_X_optimizer = make_optimizer_D(D_X_loss, self.D_X.variables, name='Adam_D_X')
@@ -337,7 +337,7 @@ class CycleGAN:
     return loss
 
   def pair_l1_loss(self, fake, gt):
-    l1 = tf.reduce_mean(tf.abs(gt-fake))*5
+    l1 = tf.reduce_mean(tf.abs(gt-fake))
     return l1
 
   def atmospheric_refine_loss_g(self, I, J, a):

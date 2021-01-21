@@ -420,6 +420,6 @@ def dark_channel_try(input):
 def color_diff(input):
   rgb_min = tf.reduce_min(input, -1, keep_dims=True)
   rgb_max = tf.reduce_max(input, -1, keep_dims=True)
-  diff= 1 - rgb_max + rgb_min
+  diff= - rgb_max + rgb_min
 
   return diff

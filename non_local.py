@@ -109,15 +109,15 @@ def sn_non_local_block_sim_attention(x, y, update_collection, name, reuse=False,
     attn_g = tf.reshape(attn_g, [batch_size, h, w, num_channels])
     '''
     #y = tf.concat([y,y,y], axis=-1)
-    attn = tf.multiply(x,y)
-    #sigma = tf.get_variable(
-    #  'sigma_ratio_a', [], initializer=tf.constant_initializer(1.0))
-    #attn = ops._instance_norm(attn, is_training=True)
+    attn = x+tf.multiply(x,y)
+    sigma = tf.get_variable(
+      'sigma_ratio_a', [], initializer=tf.constant_initializer(1.0))
+    attn = ops._instance_norm(attn)
     mean, variance = tf.nn.moments(attn, axes=[1, 2], keep_dims=True)
     epsilon = 1e-5
     inv = tf.rsqrt(variance + epsilon)
     attn = (attn - mean) * inv
     #attn_g = sn_conv1x1(attn, num_channels, update_collection, init, 'sn_conv_attn')
-    #attn = tf.nn.softmax(sigma * attn,axis=-1)+0.01
+    attn = tf.nn.softmax(sigma * attn, axis=-1)
     #x = tf.clip_by_value(sigma * attn, -1, 1)
     return attn , attn

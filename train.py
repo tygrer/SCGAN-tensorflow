@@ -27,9 +27,9 @@ tf.flags.DEFINE_float('pool_size', 50,
 tf.flags.DEFINE_integer('ngf', 64,
                         'number of gen filters in first conv layer, default: 64')
 
-tf.flags.DEFINE_string('X', 'data/hazebig.tfrecords',
+tf.flags.DEFINE_string('X', 'data/haze2000.tfrecords',
                        'X tfrecords file for training, default: data/tfrecords/apple.tfrecords')
-tf.flags.DEFINE_string('Y', 'data/clearbig.tfrecords',
+tf.flags.DEFINE_string('Y', 'data/clear2000.tfrecords',
                        'Y tfrecords file for training, default: data/tfrecords/orange.tfrecords')
 tf.flags.DEFINE_string('X_pair', 'align/haze.tfrecords',
                        'X tfrecords file for training, default: data/tfrecords/apple.tfrecords')
@@ -67,10 +67,9 @@ def train():
         beta1=FLAGS.beta1,
         ngf=FLAGS.ngf
     )
-    G_loss, D_Y_loss, F_loss, D_X_loss, g_atmospheric_loss, dark_channel_loss, cycle_guided_loss,\
-    cycle_loss, G_gan_loss, F_gan_loss, G_l1_loss, F_l1_loss, fake_x, fake_y, atmospheric_loss_g,\
-            foreground_g, foreground_f = cycle_gan.model()
-    optimizers = cycle_gan.optimize(G_loss, D_Y_loss, F_loss, D_X_loss, atmospheric_loss_g)
+    G_loss, D_Y_loss, F_loss, D_X_loss, dark_channel_loss, cycle_guided_loss,\
+    cycle_loss, G_gan_loss, F_gan_loss, G_l1_loss, F_l1_loss, fake_x, fake_y = cycle_gan.model()
+    optimizers = cycle_gan.optimize(G_loss, D_Y_loss, F_loss, D_X_loss)
 
     summary_op = tf.summary.merge_all()
     train_writer = tf.summary.FileWriter(checkpoints_dir, graph)
@@ -100,13 +99,13 @@ def train():
         fake_y_val, fake_x_val = sess.run([fake_y, fake_x])
 
         # train
-        _,G_loss_val, D_Y_loss_val, F_loss_val, D_X_loss_val,  g_atmospheric_loss_val, \
+        _,G_loss_val, D_Y_loss_val, F_loss_val, D_X_loss_val, \
         dark_channel_loss_val, cycle_guided_loss_val,\
-    cycle_loss_val, G_gan_loss_val, F_gan_loss_val, G_l1_loss_val, F_l1_loss_val, foreground_g_val, foreground_f_val, summary = (
+    cycle_loss_val, G_gan_loss_val, F_gan_loss_val, G_l1_loss_val, F_l1_loss_val, summary = (
               sess.run(
-                  [optimizers,G_loss, D_Y_loss, F_loss, D_X_loss,  g_atmospheric_loss,
+                  [optimizers,G_loss, D_Y_loss, F_loss, D_X_loss,
                    dark_channel_loss, cycle_guided_loss,
-    cycle_loss, G_gan_loss, F_gan_loss, G_l1_loss, F_l1_loss, foreground_g, foreground_f, summary_op],
+    cycle_loss, G_gan_loss, F_gan_loss, G_l1_loss, F_l1_loss, summary_op],
                   feed_dict={cycle_gan.fake_y: fake_Y_pool.query(fake_y_val),
                              cycle_gan.fake_x: fake_X_pool.query(fake_x_val)}
               )
@@ -120,7 +119,6 @@ def train():
           logging.info('  D_G_loss : {}'.format(D_Y_loss_val))
           logging.info('  F_loss   : {}'.format(F_loss_val))
           logging.info('  D_F_loss : {}'.format(D_X_loss_val))
-          logging.info('  g_atmospheric_loss : {}'.format(g_atmospheric_loss_val))
           logging.info('  dark_channel_loss : {}'.format(dark_channel_loss_val))
           logging.info('  cycle_guided_loss : {}'.format(cycle_guided_loss_val))
           logging.info('  cycle_loss : {}'.format(cycle_loss_val))
@@ -128,8 +126,6 @@ def train():
           logging.info('  F_gan_loss : {}'.format(F_gan_loss_val))
           logging.info('  G_l1_loss : {}'.format(G_l1_loss_val))
           logging.info('  F_l1_loss : {}'.format(F_l1_loss_val))
-          logging.info('  G_foreground_loss ： {}'.format(foreground_g_val))
-          logging.info('  f_foreground_loss ： {}'.format(foreground_f_val))
         if step % 1000 == 0:
             train_writer.add_summary(summary, step)
             train_writer.flush()

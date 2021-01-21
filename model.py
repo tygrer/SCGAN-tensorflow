@@ -94,14 +94,10 @@ class CycleGAN:
     fake_y_pair, real_x_pair_dm, fake_y_pair_dm, x_pair_aestimate = self.G(x_pair)
     G_l1_loss = self.pair_l1_loss(fake_y_pair,y_pair)
     G_gan_loss = self.generator_loss(self.D_Y, fake_y, use_lsgan=self.use_lsgan)
-    t1_g, t2_g, g_atmospheric_loss = self.atmospheric_refine_loss_g(x, fake_y, x_aestimate)
     restructx, _, restructx_dm, restructy_aestimate = self.F(fake_y)
     #1_f, t2_f, f_atmospheric_loss_back = self.atmospheric_refine_loss_f(fake_y, restructx, restructy_aestimate)
     D_Y_loss = self.discriminator_loss(self.D_Y, y, fake_y, use_lsgan=self.use_lsgan)
-    foreground_gt, foreground_restruction_gI,foreground_g_loss = self.only_limited_foreground_loss_g(x, fake_y, x_aestimate)
-    #foreground_g_loss_back = self.only_limited_foreground_loss_f(fake_y, x, restructy_aestimate)
-    only_limit_foreground_g_loss = foreground_g_loss #+ foreground_g_loss_back
-    restruct_loss, tt, aa = self.restruct_phscial_model(x, fake_y)
+
     # Y -> X
     fake_x, real_y_dm, fake_x_dm, y_aestimate = self.F(y)
     restructy, _, restructy_dm, restructx_aestimate = self.G(fake_x)
@@ -111,18 +107,15 @@ class CycleGAN:
     #1_f_1, t2_f_1, f_atmospheric_loss = self.atmospheric_refine_loss_f(y, fake_x, restructx_aestimate)
     #1_g_1, t2_g_1, g_atmospheric_loss_back = self.atmospheric_refine_loss_g(fake_x, restructy, restructx_aestimate)
     D_X_loss = self.discriminator_loss(self.D_X, x, fake_x, use_lsgan=self.use_lsgan)
-    foreground_ft, foreground_restruction_fI, foreground_f_loss = self.only_limited_foreground_loss_f(y, fake_x, y_aestimate)
-    #foreground_f_loss_back = self.only_limited_foreground_loss_f(fake_x, y, restructx_aestimate)
-    only_limit_foreground_f_loss = foreground_f_loss #+ foreground_f_loss_back
+
     cycle_loss = self.cycle_consistency_loss(restructx, restructy, x, y)
     cycle_guided_loss = self.guided_filter_consistency_loss(restructx, restructy, x, y)
     dark_channel_loss = self.dark_channel_loss(restructx_dm, restructy_dm, real_x_dm, real_y_dm)
 
-    G_loss =  G_gan_loss + cycle_loss + cycle_guided_loss #+ G_l1_loss  #+ dark_channel_loss#+restruct_loss + only_limit_foreground_g_loss #+ g_atmospheric_loss + f_atmospheric_loss_back
-    F_loss = F_gan_loss + cycle_loss + cycle_guided_loss #+ F_l1_loss #+ dark_channel_loss #+ f_atmospheric_loss  + g_atmospheric_loss_back
+    G_loss =  G_gan_loss + cycle_loss + cycle_guided_loss + G_l1_loss  + dark_channel_loss#+restruct_loss + only_limit_foreground_g_loss #+ g_atmospheric_loss + f_atmospheric_loss_back
+    F_loss = F_gan_loss + cycle_loss + cycle_guided_loss + F_l1_loss + dark_channel_loss #+ f_atmospheric_loss  + g_atmospheric_loss_back
 
-    atmospheric_loss_g = g_atmospheric_loss + restruct_loss + only_limit_foreground_g_loss  #+ f_atmospheric_loss_back
-    atmospheric_loss_f = only_limit_foreground_f_loss #+ g_atmospheric_loss_back
+
     # summary
     #tf.summary.histogram('D_Y/true', self.D_Y(y,None))
     #tf.summary.histogram('D_Y/fake', self.D_Y(self.G(x),"NO_OPS"))
@@ -137,12 +130,9 @@ class CycleGAN:
     tf.summary.scalar('loss/F_L', F_l1_loss)
     tf.summary.scalar('loss/cycle', cycle_loss)
     tf.summary.scalar('loss/cycle_guided', cycle_guided_loss)
-    tf.summary.scalar('loss/g_atmospheric_loss', g_atmospheric_loss)
     #tf.summary.scalar('loss/f_atmospheric_loss', f_atmospheric_loss)
     tf.summary.scalar('loss/dark_channel_loss', dark_channel_loss)
-    tf.summary.scalar('loss/only_limit_foreground_g_loss', only_limit_foreground_g_loss)
-    tf.summary.scalar('loss/only_limit_foreground_f_loss', only_limit_foreground_f_loss)
-    tf.summary.scalar('loss/restruct_loss', restruct_loss)
+
 
     tf.summary.image('X/darkmap', utils.batch_convert2int(real_x_dm))
     tf.summary.image('Y/gen_darkmap', utils.batch_convert2int(fake_x_dm))
@@ -150,14 +140,10 @@ class CycleGAN:
     tf.summary.image('X/restru_darkmap', utils.batch_convert2int(restructx_dm))
     tf.summary.image('X/reconstruction', utils.batch_convert2int(restructx))
     tf.summary.image('X/fake_refine_x', utils.batch_convert2int(self.fake_refinex))
-    tf.summary.image('X/t1', utils.batch_convert2int((t1_g)))
-    tf.summary.image('X/t2', utils.batch_convert2int((t2_g)))
     tf.summary.image('X/A', utils.batch_convert2int((x_aestimate)))
-    tf.summary.image('X/restruct_t',utils.batch_convert2int((tt)))
-    tf.summary.image('X/restruct_A',utils.batch_convert2int(aa))
+
     tf.summary.image('X/pair', utils.batch_convert2int(x_pair))
-    tf.summary.image('X/forgroundgt', utils.batch_convert2int(foreground_gt))
-    tf.summary.image('X/forgroundg_RI_t', utils.batch_convert2int(foreground_restruction_gI))
+
     tf.summary.image('Y/pair', utils.batch_convert2int(y_pair))
     tf.summary.image('Y/darkmap', utils.batch_convert2int(real_y_dm))
     tf.summary.image('X/gen_darkmap', utils.batch_convert2int(fake_y_dm))
@@ -168,18 +154,16 @@ class CycleGAN:
     #tf.summary.image('Y/t1', utils.batch_convert2int((t1_f_1)))
     #tf.summary.image('Y/t2', utils.batch_convert2int((t2_f_1)))
     tf.summary.image('Y/A', utils.batch_convert2int((y_aestimate)))
-    tf.summary.image('Y/forgroundft', utils.batch_convert2int(foreground_ft))
-    tf.summary.image('Y/forgroundg_RI_t', utils.batch_convert2int(foreground_restruction_fI))
+
     self.get_vars()
     print('sigma_ratio_vars', self.sigma_ratio_vars)
     for var in self.sigma_ratio_vars:
        tf.summary.scalar(var.name, var)
-    return G_loss, D_Y_loss, F_loss, D_X_loss, g_atmospheric_loss, dark_channel_loss,\
-           cycle_guided_loss,cycle_loss,G_gan_loss,F_gan_loss,G_l1_loss,F_l1_loss,fake_x,fake_y, \
-           atmospheric_loss_g,only_limit_foreground_g_loss,only_limit_foreground_f_loss
+    return G_loss, D_Y_loss, F_loss, D_X_loss, dark_channel_loss,\
+           cycle_guided_loss,cycle_loss,G_gan_loss,F_gan_loss,G_l1_loss,F_l1_loss,fake_x,fake_y
 
 
-  def optimize(self, G_loss, D_Y_loss, F_loss, D_X_loss, atmospheric_loss_g):
+  def optimize(self, G_loss, D_Y_loss, F_loss, D_X_loss):
     def make_optimizer_G(loss, variables, atmospheric_loss=None, name='Adam'):
       """ Adam optimizer with learning rate 0.0002 for the first 100k steps (~100 epochs)
           and a linearly decaying rate that goes to zero over the next 100k steps
@@ -187,8 +171,8 @@ class CycleGAN:
       global_step = tf.Variable(0, trainable=False)
       starter_learning_rate = self.learning_rate
       end_learning_rate = 0.0
-      start_decay_step = 10000
-      decay_steps = 30000
+      start_decay_step = 1000
+      decay_steps = 3000
       start_atmospheric_step =90000
       beta1 = self.beta1
       learning_rate = (
@@ -236,8 +220,8 @@ class CycleGAN:
       """
       global_step = tf.Variable(0, trainable=False)
       starter_learning_rate = self.learning_rate
-      start_decay_step = 10000
-      decay_steps = 30000
+      start_decay_step = 5000
+      decay_steps = 5000
       beta1 = self.beta1
       learning_rate = (
           tf.where(

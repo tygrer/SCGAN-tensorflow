@@ -6,7 +6,7 @@ from discriminator import Discriminator
 from generator import Generator
 from guided_filter import guided_filter
 
-REAL_LABEL = 1
+REAL_LABEL = 0.95
 
 class CycleGAN:
   def __init__(self,
@@ -42,7 +42,7 @@ class CycleGAN:
     self.lambda1 = lambda1
     self.lambda2 = lambda2
     self.use_lsgan = use_lsgan
-    use_sigmoid = use_lsgan
+    use_sigmoid = not use_lsgan
     self.batch_size = batch_size
     self.image_size = image_size
     self.learning_rate = learning_rate
@@ -321,7 +321,7 @@ class CycleGAN:
     return loss
 
   def pair_l1_loss(self, fake, gt):
-    l1 = tf.reduce_mean(tf.abs(gt-fake))
+    l1 = tf.reduce_mean(tf.abs(gt-fake))*self.lambda1
     return l1
 
   def atmospheric_refine_loss_g(self, I, J, a):

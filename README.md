@@ -1,36 +1,37 @@
-# CycleGAN-TensorFlow
-An implementation of CycleGan using TensorFlow (work in progress).
+# SCGAN-TensorFlow
+An implementation of SCGAN using TensorFlow. You can click here to visit [Torch version](https://).
 
-Original paper: https://arxiv.org/abs/1703.10593
+Original paper: https://arxiv.org/abs/2210.07594
 
 ## Results on test data
 
-### apple -> orange
+### haze -> clear
 
-| Input | Output | | Input | Output | | Input | Output |
-|-------|--------|-|-------|--------|-|-------|--------|
-|![apple2orange_1](samples/real_apple2orange_1.jpg) | ![apple2orange_1](samples/fake_apple2orange_1.jpg)| |![apple2orange_2](samples/real_apple2orange_2.jpg) | ![apple2orange_2](samples/fake_apple2orange_2.jpg)| |![apple2orange_3](samples/real_apple2orange_3.jpg) | ![apple2orange_3](samples/fake_apple2orange_3.jpg)|
+| Input | Output |
+|-------|--------|
+|![haze2clear_1](samples/real_apple2orange_1.jpg) | ![haze2clear_1](samples/fake_apple2orange_1.jpg)| 
 
 
-### orange -> apple
+### clear -> haze
 
-| Input | Output | | Input | Output | | Input | Output |
-|-------|--------|-|-------|--------|-|-------|--------|
-|![orange2apple_1](samples/real_orange2apple_1.jpg) | ![orange2apple_1](samples/fake_orange2apple_1.jpg)| |![orange2apple_2](samples/real_orange2apple_2.jpg) | ![orange2apple_2](samples/fake_orange2apple_2.jpg)| |![orange2apple_3](samples/real_orange2apple_3.jpg) | ![orange2apple_3](samples/fake_orange2apple_3.jpg)|
+| Input | Output |
+|-------|--------|
+|![clear2haze_1](samples/real_orange2apple_1.jpg) | ![clear2haze_1](samples/fake_orange2apple_1.jpg)| 
 
-## Environment
 
 * TensorFlow 1.0.0
 * Python 3.6.0
 
 ## Data preparing
+First, download the dataset
+* Unpaired dataset: The dataset is built by ourselves, and there are all real haze images from website.
 
-* First, download a dataset, e.g. apple2orange
+    Address：[Baidu cloud disk](https://pan.baidu.com/s/1zRvbGmt7IOMoWSmQQz-ZHA)  Extraction code：f35u
 
-```bash
-$ bash download_dataset.sh apple2orange
-```
-
+* Paired dataset: The dataset is added haze by ourselves according to the image depth. 
+    
+    Address: [Baidu cloud disk]() Extraction code :
+    
 * Write the dataset to tfrecords
 
 ```bash
@@ -49,8 +50,8 @@ If you want to change some default settings, you can pass those to the command l
 
 ```bash
 $ python3 train.py  \
-    --X=data/tfrecords/horse.tfrecords \
-    --Y=data/tfrecords/zebra.tfrecords
+    --X=data/tfrecords/haze.tfrecords \
+    --Y=data/tfrecords/dehaze.tfrecords
 ```
 
 Here is the list of arguments:
@@ -67,7 +68,7 @@ optional arguments:
   --batch_size BATCH_SIZE
                         batch size, default: 1
   --image_size IMAGE_SIZE
-                        image size, default: 256
+                        image size, default: 128
   --use_lsgan [USE_LSGAN]
                         use lsgan (mean squared error) or cross entropy loss,
                         default: True
@@ -106,22 +107,13 @@ $ python3 train.py  \
     --load_model 20170602-1936
 ```
 
-Here are some funny screenshots from TensorBoard when training orange -> apple:
-
-![train_screenshot](samples/train_screenshot.png)
-
-
-### Notes
-* If high constrast background colors between input and generated images are observed (e.g. black becomes white), you should restart your training!
-* Train several times to get the best models.
-
 ## Export model
 You can export from a checkpoint to a standalone GraphDef file as follow:
 
 ```bash
 $ python3 export_graph.py --checkpoint_dir checkpoints/${datetime} \
-                          --XtoY_model apple2orange.pb \
-                          --YtoX_model orange2apple.pb \
+                          --XtoY_model haze2dehaze.pb \
+                          --YtoX_model dehaze2haze.pb \
                           --image_size 256
 ```
 
@@ -130,22 +122,18 @@ $ python3 export_graph.py --checkpoint_dir checkpoints/${datetime} \
 After exporting model, you can use it for inference. For example:
 
 ```bash
-python3 inference.py --model pretrained/apple2orange.pb \
-                     --input input_sample.jpg \
-                     --output output_sample.jpg \
+python3 inference.py --model pretrained/haze2dehaze.pb \
+                     --input haze.jpg \
+                     --output dehaze.jpg \
                      --image_size 256
 ```
 
-## Pretrained models
-My pretrained models are available at https://github.com/vanhuyz/CycleGAN-TensorFlow/releases
 
 ## Contributing
 Please open an issue if you have any trouble or found anything incorrect in my code :)
 
-## License
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ## References
 
-* CycleGAN paper: https://arxiv.org/abs/1703.10593
+* SCGAN paper: https://arxiv.org/abs/2210.07594
 * Official source code in Torch: https://github.com/junyanz/CycleGAN

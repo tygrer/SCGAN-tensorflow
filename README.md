@@ -1,24 +1,18 @@
 # SCGAN-TensorFlow
-An implementation of SCGAN using TensorFlow. You can click here to visit [Torch version](https://).
+An implementation of SCGAN using TensorFlow. You can click here to visit [Torch version](https://github.com/tygrer/SCGAN).
 
 Original paper: https://arxiv.org/abs/2210.07594
 
 ## Results on test data
 
+
 ### haze -> clear
 
 | Input | Output |
 |-------|--------|
-|![haze2clear_1](samples/real_apple2orange_1.jpg) | ![haze2clear_1](samples/fake_apple2orange_1.jpg)| 
+|![haze2clear_1](samples/real_haze.jpg) | ![haze2clear_1](samples/fake_haze2dehaze.png)| 
 
-
-### clear -> haze
-
-| Input | Output |
-|-------|--------|
-|![clear2haze_1](samples/real_orange2apple_1.jpg) | ![clear2haze_1](samples/fake_orange2apple_1.jpg)| 
-
-
+## Prerequisites
 * TensorFlow 1.0.0
 * Python 3.6.0
 
@@ -26,11 +20,16 @@ Original paper: https://arxiv.org/abs/2210.07594
 First, download the dataset
 * Unpaired dataset: The dataset is built by ourselves, and there are all real haze images from website.
 
-    Address：[Baidu cloud disk](https://pan.baidu.com/s/1zRvbGmt7IOMoWSmQQz-ZHA)  Extraction code：f35u
+    10000 images:
+    Address：[Baidu cloud disk](https://pan.baidu.com/s/18Zjm93sZHPHyqgHwlLa-SA)  Extraction code：zvh6
+
+    1000  images:
+    Address：[Baidu cloud disk](https://pan.baidu.com/s/1BZ2EZS19nYlYEz5J-2Tt6A)  Extraction code:47v9 
 
 * Paired dataset: The dataset is added haze by ourselves according to the image depth. 
     
-    Address: [Baidu cloud disk]() Extraction code :
+    Address: [Baidu cloud disk](https://pan.baidu.com/s/115OUlSkuYkRUOuGMDREkVg) Extraction code : 63xf
+
     
 * Write the dataset to tfrecords
 
@@ -136,4 +135,5 @@ Please open an issue if you have any trouble or found anything incorrect in my c
 ## References
 
 * SCGAN paper: https://arxiv.org/abs/2210.07594
-* Official source code in Torch: https://github.com/junyanz/CycleGAN
+* Official source code in Torch: https://github.com/tygrer/SCGAN
+* reference code CycleGan: https://github.com/junyanz/CycleGAN
